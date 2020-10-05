@@ -23,3 +23,6 @@ from spinup.utils.logx import Logger, EpochLogger
 
 # Version
 from spinup.version import __version__
+
+# Register custom envs
+from spinup.envs import *
