@@ -26,12 +26,12 @@ def sync_all_params():
     return sync_params(tf.global_variables())
 
 
-class MpiAdamOptimizer(tf.train.AdamOptimizer):
+class MpiAdamOptimizer(tf.optimizers.Adam):
     """
     Adam optimizer that averages gradients across MPI processes.
 
-    The compute_gradients method is taken from Baselines `MpiAdamOptimizer`_. 
-    For documentation on method arguments, see the Tensorflow docs page for 
+    The compute_gradients method is taken from Baselines `MpiAdamOptimizer`_.
+    For documentation on method arguments, see the Tensorflow docs page for
     the base `AdamOptimizer`_.
 
     .. _`MpiAdamOptimizer`: https://github.com/openai/baselines/blob/master/baselines/common/mpi_adam_optimizer.py
