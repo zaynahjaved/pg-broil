@@ -1,13 +1,16 @@
 import torch
 import torch.nn as nn
 from torch.distributions.categorical import Categorical
+from torch.distributions.normal import Normal
 from torch.optim import Adam
 import numpy as np
 import gym
 from gym.spaces import Discrete, Box
 
 from spinup.examples.pytorch.broil_rtg_pg_v2.cvar_utils import cvar_enumerate_pg
-from spinup.examples.pytorch.broil_rtg_pg_v2.cartpole_reward_utils import CartPoleReward
+from spinup.examples.pytorch.broil_rtg_pg_v2.pointbot_reward_utils import PointBotReward
+
+global_log_std = 0
 
 def mlp(sizes, activation=nn.Tanh, output_activation=nn.Identity):
     # Build a feedforward neural network.
@@ -31,27 +34,32 @@ def train(reward_dist, lamda, alpha=0.95, env_name='CartPole-v0', hidden_sizes=[
     env = gym.make(env_name)
     assert isinstance(env.observation_space, Box), \
         "This example only works for envs with continuous state spaces."
-    assert isinstance(env.action_space, Discrete), \
-        "This example only works for envs with discrete action spaces."
+    if isinstance(env.action_space, Box):
+        n_acts = env.action_space.shape[0]
+    else:
+        n_acts = env.action_space.n
 
     obs_dim = env.observation_space.shape[0]
-    n_acts = env.action_space.n
 
     # make core of policy network
-    logits_net = mlp(sizes=[obs_dim]+hidden_sizes+[n_acts])
+    log_std = -0.5 * np.ones(n_acts, dtype=np.float32)
+    global_log_std = torch.nn.Parameter(torch.as_tensor(log_std))
+    mu_net = mlp(sizes=[obs_dim]+hidden_sizes+[n_acts])
 
     # make function to compute action distribution
     def get_policy(obs):
-        logits = logits_net(obs)
-        return Categorical(logits=logits)
+        mu = mu_net(obs)
+        std = torch.exp(global_log_std)
+        return Normal(mu, std)
 
     # make action selection function (outputs int actions, sampled from policy)
     def get_action(obs):
-        return get_policy(obs).sample().item()
+        return get_policy(obs).sample().numpy()
 
     # make loss function whose gradient, for the right data, is policy gradient
     def compute_loss(obs, act, weights):
-        logp = get_policy(obs).log_prob(act)
+        logp = get_policy(obs).log_prob(act).sum(dim=1).squeeze()
+        print(weights)
         return -(logp * weights).mean()
 
 
@@ -98,7 +106,7 @@ def train(reward_dist, lamda, alpha=0.95, env_name='CartPole-v0', hidden_sizes=[
 
 
     # make optimizer
-    optimizer = Adam(logits_net.parameters(), lr=lr)
+    optimizer = Adam(mu_net.parameters(), lr=lr)
 
     # for training policy
     def train_one_epoch():
@@ -137,7 +145,7 @@ def train(reward_dist, lamda, alpha=0.95, env_name='CartPole-v0', hidden_sizes=[
             ## old code from normal policy gradient:
             ## ep_rews.append(rew)
             #### New code for BROIL
-            rew_dist = reward_dist.get_reward_distribution(obs)  #S create reward
+            rew_dist = reward_dist.get_reward_distribution(env, obs) #S create reward
             ep_rews.append(rew_dist)
             ####
 
@@ -171,7 +179,7 @@ def train(reward_dist, lamda, alpha=0.95, env_name='CartPole-v0', hidden_sizes=[
         ####
         optimizer.zero_grad()
         batch_loss = compute_loss(obs=torch.as_tensor(batch_obs, dtype=torch.float32),
-                                  act=torch.as_tensor(batch_acts, dtype=torch.int32),
+                                  act=torch.FloatTensor(np.vstack(batch_acts)),
                                   weights=torch.as_tensor(broil_weights, dtype=torch.float32)
                                   )
 
@@ -209,10 +217,10 @@ def train(reward_dist, lamda, alpha=0.95, env_name='CartPole-v0', hidden_sizes=[
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--env_name', '--env', type=str, default='CartPole-v0')
+    parser.add_argument('--env_name', '--env', type=str, default='PointBot-v0')
     parser.add_argument('--render', action='store_true')
-    parser.add_argument('--alpha', default=0.95, type=float, help="alpha for alpha CVaR")
-    parser.add_argument('--lamda', default = 0.0, type=float, help='blending between exp return (lamda=1) and cvar maximization (lamda=0)')
+    parser.add_argument('--alpha', default=0.8, type=float, help="alpha for alpha CVaR")
+    parser.add_argument('--lamda', default = 0.1, type=float, help='blending between exp return (lamda=1) and cvar maximization (lamda=0)')
     parser.add_argument('--lr', type=float, default=1e-2)
     parser.add_argument('--epochs', type=int, default=100)
     args = parser.parse_args()
@@ -225,6 +233,6 @@ if __name__ == '__main__':
     #print("Expected reward R(s) = +1 (if s <= 0) +1.4 (if s > 0)")
 
     #create reward function distribution
-    reward_dist = CartPoleReward()
+    reward_dist = PointBotReward()
 
     train(reward_dist, args.lamda, args.alpha, env_name=args.env_name, epochs=args.epochs, render=args.render, lr=args.lr)
