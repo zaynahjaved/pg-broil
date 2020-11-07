@@ -3,12 +3,13 @@ import torch
 from torch.optim import Adam
 import gym
 import time
-import spinup.algos.pytorch.vpg.core as core
+import spinup.algos.pytorch.broil_vpg.core as core
 from spinup.utils.logx import EpochLogger
 from spinup.utils.mpi_pytorch import setup_pytorch_for_mpi, sync_params, mpi_avg_grads
 from spinup.utils.mpi_tools import mpi_fork, mpi_avg, proc_id, mpi_statistics_scalar, num_procs
 from spinup.examples.pytorch.broil_rtg_pg_v2.cartpole_reward_utils import CartPoleReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.cvar_utils import cvar_enumerate_pg
+
 
 class VPGBuffer:
     """
@@ -65,22 +66,23 @@ class VPGBuffer:
 
         if isinstance(last_val, int):
             #path_slice = slice(self.path_start_idx, self.ptr)
-            rews = np.asarray([r+[last_val] for r in self.rew_buf]) #np.append(self.rew_buf[path_slice], last_val)
+            #rews = np.asarray([r+[last_val] for r in self.rew_buf]) #np.append(self.rew_buf[path_slice], last_val)
             #vals =  np.insert(np.asarray(self.rew_buf), len(self.rew_buf[0]), last_val*np.ones(len(self.rew_buf)), axis=1) #np.append(self.val_buf[path_slice], last_val)
-            vals = np.asarray([r+[last_val] for r in self.val_buf])
+            #vals = np.asarray([r+[last_val] for r in self.val_buf])
+            rews = np.vstack((np.asarray(self.rew_buf), [last_val, last_val]))
+            vals = np.vstack((np.asarray(self.val_buf), [last_val, last_val]))
         else:
             rews = np.vstack((np.asarray(self.rew_buf), last_val))
             vals = np.vstack((np.asarray(self.val_buf), last_val))
         
         advs = []
-        #print(rews.shape)
         # the next two lines implement GAE-Lambda advantage calculation
-        for i in range(len(rews)):
-            deltas = rews[i,:-1] + self.gamma * vals[i, 1:] - vals[i, :-1]
-            #print(deltas.shape)
+        for i in range(rews.shape[1]):
+            deltas = rews[:-1,i] + self.gamma * vals[i, 1:] - vals[i, :-1]
             #print(deltas.shape)
             advs.append(core.discount_cumsum(deltas, self.gamma * self.lam))
             #print(np.asarray(advs).shape)
+        #print(np.asarray(advs).shape)
         self.adv_buf = advs
 
         rets = []
@@ -250,11 +252,15 @@ def vpg(env_fn, reward_dist, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),
         pi, logp = ac.pi(obs, act)
         wts = torch.from_numpy(wts)
         print(logp.size())
-        print(adv.size())
+        print(adv.T.size())
         print(wts.size())
-        # TODO: implement correct loss
-        loss_pi = -(logp * adv * wts).mean()
 
+        loss = 0
+        for i in range(adv.size()[0]):
+        # TODO: implement correct loss
+            loss += logp*adv[i]*wts[i]
+
+        loss_pi = -(loss).mean()
         # Useful extra info
         approx_kl = (logp_old - logp).mean().item()
         ent = pi.entropy().mean().item()
@@ -270,6 +276,8 @@ def vpg(env_fn, reward_dist, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),
         #batch_rtgs =   
         #batch_rtgs = core.discount_cumsum(buf.rew_buf[slice(buf.path_start_idx, buf.ptr)], gamma)
         print("Rets {}".format(np.asarray(batch_rets).shape))
+
+        batch_rtgs = buf.adv_buf
         print("Rtgs {}".format(np.asarray(batch_rtgs).shape))
         exp_batch_rets = np.mean(batch_rets, axis=0)
         posterior_reward_weights = reward_dist.posterior
@@ -292,7 +300,6 @@ def vpg(env_fn, reward_dist, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),
     # Set up function for computing value loss
     def compute_loss_v(data):
         obs, ret = data['obs'], data['ret']
-        print(ret)
         #TODO: implement correct loss
         return ((ac.v(obs) - ret)**2).mean()
 
@@ -429,7 +436,8 @@ if __name__ == '__main__':
 
     mpi_fork(args.cpu)  # run parallel code with mpi
 
-    from run_utils import setup_logger_kwargs
+    from spinup.utils.run_utils import setup_logger_kwargs
+    import spinup.algos.pytorch.broil_vpg.core as core
     logger_kwargs = setup_logger_kwargs(args.exp_name, args.seed)
 
     reward_dist = CartPoleReward()
