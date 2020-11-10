@@ -160,6 +160,10 @@ class BROILActorCritic(nn.Module):
             a = pi.sample()
             logp_a = self.pi._log_prob_from_distribution(pi, a)
             v = self.v(obs)
+
+            if (type(v) == list):
+                v = torch.from_numpy(np.asarray(v))
+
         return a.numpy(), v.numpy(), logp_a.numpy()
 
     def act(self, obs):
@@ -175,9 +179,10 @@ class BROILCritic(nn.Module):
     def forward(self, obs):
         vals = []
         for v_net in self.v_nets:
-            vals.append(torch.squeeze(v_net(obs), -1))
-        #print(vals)
-        return torch.from_numpy(np.asarray(vals))
+            v = torch.squeeze(v_net(obs), -1)
+            vals.append(v)
+            
+        return vals
 
 
 

@@ -3,7 +3,7 @@ import torch
 from torch.optim import Adam
 import gym
 import time
-import spinup.algos.pytorch.broil_vpg.core as core
+import spinup.algos.pytorch.vpg.core as core
 from spinup.utils.logx import EpochLogger
 from spinup.utils.mpi_pytorch import setup_pytorch_for_mpi, sync_params, mpi_avg_grads
 from spinup.utils.mpi_tools import mpi_fork, mpi_avg, proc_id, mpi_statistics_scalar, num_procs
@@ -104,7 +104,7 @@ class VPGBuffer:
         assert self.ptr == self.max_size    # buffer has to be full before you can get
         self.ptr, self.path_start_idx = 0, 0
         # the next two lines implement the advantage normalization trick
-        print(np.asarray(self.adv_buf).shape)
+        #print(np.asarray(self.adv_buf).shape)
         adv_mean, adv_std = mpi_statistics_scalar(self.adv_buf)
         self.adv_buf = (self.adv_buf - adv_mean) / adv_std
         data = dict(obs=self.obs_buf, act=self.act_buf, ret=self.ret_buf,
@@ -255,12 +255,13 @@ def vpg(env_fn, reward_dist, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),
         print(adv.T.size())
         print(wts.size())
 
-        loss = 0
+        loss_pi = 0
         for i in range(adv.size()[0]):
         # TODO: implement correct loss
-            loss += logp*adv[i]*wts[i]
+            #loss += logp*adv[i]*wts[i]
+            loss_pi += -1*(logp*wts[i]).mean()
 
-        loss_pi = -(loss).mean()
+        #loss_pi = -(loss).mean()
         # Useful extra info
         approx_kl = (logp_old - logp).mean().item()
         ent = pi.entropy().mean().item()
@@ -301,7 +302,13 @@ def vpg(env_fn, reward_dist, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),
     def compute_loss_v(data):
         obs, ret = data['obs'], data['ret']
         #TODO: implement correct loss
-        return ((ac.v(obs) - ret)**2).mean()
+        loss = []
+        v = np.asarray(ac.v(obs))
+        #print(ret[:-1].size())
+        for i in range(v.shape[0]):
+            loss.append(((v[i]-ret[:-1])**2).mean())
+
+        return loss
 
     # Set up optimizers for policy and value function
     pi_optimizer = Adam(ac.pi.parameters(), lr=pi_lr)
@@ -317,7 +324,7 @@ def vpg(env_fn, reward_dist, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),
         wts_old = compute_broil_weights(batch_rets, batch_rtgs)
         pi_l_old, pi_info_old = compute_loss_pi(data, wts_old)
         pi_l_old = pi_l_old.item()
-        v_l_old = compute_loss_v(data).item()
+        v_l_old = compute_loss_v(data)
 
         # Train policy with a single step of gradient descent
         pi_optimizer.zero_grad()
@@ -329,18 +336,19 @@ def vpg(env_fn, reward_dist, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),
 
         # Value function learning
         for i in range(train_v_iters):
-            vf_optimizer.zero_grad()
-            loss_v = compute_loss_v(data)
-            loss_v.backward()
-            mpi_avg_grads(ac.v)    # average grads across MPI processes
-            vf_optimizer.step()
+            losses = compute_loss_v(data)
+            for j in range(len(vf_optimizers)):
+                vf_optimizers[j].zero_grad()
+                loss_v = losses[j]
+                loss_v.backward()
+                mpi_avg_grads(ac.v)    # average grads across MPI processes
+                vf_optimizers[j].step()
 
         # Log changes from update
         kl, ent = pi_info['kl'], pi_info_old['ent']
         logger.store(LossPi=pi_l_old, LossV=v_l_old,
                      KL=kl, Entropy=ent,
-                     DeltaLossPi=(loss_pi.item() - pi_l_old),
-                     DeltaLossV=(loss_v.item() - v_l_old))
+                     DeltaLossPi=(loss_pi.item() - pi_l_old))
 
 
     # Prepare for interaction with environment
@@ -354,9 +362,19 @@ def vpg(env_fn, reward_dist, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),
         ep_rews = []
         batch_rets = []
         batch_rtgs = []
+
+        buf.adv_buf = []
+        buf.rew_buf = []
+        buf.ret_buf = []
+        buf.val_buf = []
+        left_ac = 0
+        right_ac = 0
         for t in range(local_steps_per_epoch):
             a, v, logp = ac.step(torch.as_tensor(o, dtype=torch.float32))
-
+            if a == 0:
+                left_ac += 1
+            else:
+                right_ac += 1
             next_o, r, d, _ = env.step(a)
             #ep_ret += r
             #ep_len += 1
@@ -393,7 +411,9 @@ def vpg(env_fn, reward_dist, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),
                 buf.finish_path(v)
                 if terminal:
                     # only save EpRet / EpLen if trajectory finished
-                    logger.store(EpRet=ep_ret, EpLen=ep_len)
+                    logger.store(EpRet=np.dot(ep_ret_dist,np.mean(batch_rets,axis=0)), EpLen=ep_len)
+                    #print("Left {}".format(left_ac))
+                    #print("Right {}".format(right_ac))
                 o, ep_ret, ep_len = env.reset(), 0, 0
 
 
@@ -413,7 +433,7 @@ def vpg(env_fn, reward_dist, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),
         logger.log_tabular('LossPi', average_only=True)
         logger.log_tabular('LossV', average_only=True)
         logger.log_tabular('DeltaLossPi', average_only=True)
-        logger.log_tabular('DeltaLossV', average_only=True)
+        #logger.log_tabular('DeltaLossV', average_only=True)
         logger.log_tabular('Entropy', average_only=True)
         logger.log_tabular('KL', average_only=True)
         logger.log_tabular('Time', time.time()-start_time)
@@ -432,17 +452,17 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type=int, default=50)
     parser.add_argument('--exp_name', type=str, default='vpg')
     parser.add_argument('--alpha', type=float, default=0.95)
+    parser.add_argument('--lam', type=float, default=0.9)
     args = parser.parse_args()
 
     mpi_fork(args.cpu)  # run parallel code with mpi
 
     from spinup.utils.run_utils import setup_logger_kwargs
-    import spinup.algos.pytorch.broil_vpg.core as core
     logger_kwargs = setup_logger_kwargs(args.exp_name, args.seed)
 
     reward_dist = CartPoleReward()
 
     vpg(lambda : gym.make(args.env), reward_dist=reward_dist, actor_critic=core.BROILActorCritic,
-        ac_kwargs=dict(hidden_sizes=[args.hid]*args.l), gamma=args.gamma, 
+        ac_kwargs=dict(hidden_sizes=[args.hid]*args.l), gamma=args.gamma, lam=args.lam,
         seed=args.seed, steps_per_epoch=args.steps, epochs=args.epochs,
         logger_kwargs=logger_kwargs, alpha=args.alpha)
