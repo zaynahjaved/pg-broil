@@ -7,8 +7,7 @@ import spinup.algos.pytorch.vpg.core as core
 from spinup.utils.logx import EpochLogger
 from spinup.utils.mpi_pytorch import setup_pytorch_for_mpi, sync_params, mpi_avg_grads
 from spinup.utils.mpi_tools import mpi_fork, mpi_avg, proc_id, mpi_statistics_scalar, num_procs
-from spinup.examples.pytorch.broil_rtg_pg_v2.cartpole_reward_utils import CartPoleReward
-from spinup.examples.pytorch.broil_rtg_pg_v2.cvar_utils import cvar_enumerate_pg
+
 
 class VPGBuffer:
     """
@@ -20,14 +19,10 @@ class VPGBuffer:
     def __init__(self, obs_dim, act_dim, size, gamma=0.99, lam=0.95):
         self.obs_buf = np.zeros(core.combined_shape(size, obs_dim), dtype=np.float32)
         self.act_buf = np.zeros(core.combined_shape(size, act_dim), dtype=np.float32)
-        #self.adv_buf = np.zeros(size, dtype=np.float32)
-        self.adv_buf = []
-        #self.rew_buf = np.zeros(size, dtype=np.float32)
-        self.rew_buf = []
-        #self.ret_buf = np.zeros(size, dtype=np.float32)
-        self.ret_buf = []
-        #self.val_buf = np.zeros(size, dtype=np.float32)
-        self.val_buf = []
+        self.adv_buf = np.zeros(size, dtype=np.float32)
+        self.rew_buf = np.zeros(size, dtype=np.float32)
+        self.ret_buf = np.zeros(size, dtype=np.float32)
+        self.val_buf = np.zeros(size, dtype=np.float32)
         self.logp_buf = np.zeros(size, dtype=np.float32)
         self.gamma, self.lam = gamma, lam
         self.ptr, self.path_start_idx, self.max_size = 0, 0, size
@@ -39,13 +34,10 @@ class VPGBuffer:
         assert self.ptr < self.max_size     # buffer has to have room so you can store
         self.obs_buf[self.ptr] = obs
         self.act_buf[self.ptr] = act
-        #self.rew_buf[self.ptr] = rew
-        self.rew_buf.append(rew)
-        #self.val_buf[self.ptr] = val
-        self.val_buf.append(val)
+        self.rew_buf[self.ptr] = rew
+        self.val_buf[self.ptr] = val
         self.logp_buf[self.ptr] = logp
         self.ptr += 1
-
 
     def finish_path(self, last_val=0):
         """
@@ -55,7 +47,6 @@ class VPGBuffer:
         the whole trajectory to compute advantage estimates with GAE-Lambda,
         as well as compute the rewards-to-go for each state, to use as
         the targets for the value function.
-
         The "last_val" argument should be 0 if the trajectory ended
         because the agent reached a terminal state (died), and otherwise
         should be V(s_T), the value function estimated for the last state.
@@ -63,34 +54,17 @@ class VPGBuffer:
         for timesteps beyond the arbitrary episode horizon (or epoch cutoff).
         """
 
-        if isinstance(last_val, int):
-            #path_slice = slice(self.path_start_idx, self.ptr)
-            rews = np.asarray([r+[last_val] for r in self.rew_buf]) #np.append(self.rew_buf[path_slice], last_val)
-            #vals =  np.insert(np.asarray(self.rew_buf), len(self.rew_buf[0]), last_val*np.ones(len(self.rew_buf)), axis=1) #np.append(self.val_buf[path_slice], last_val)
-            vals = np.asarray([r+[last_val] for r in self.val_buf])
-        else:
-            rews = np.vstack((np.asarray(self.rew_buf), last_val))
-            vals = np.vstack((np.asarray(self.val_buf), last_val))
+        path_slice = slice(self.path_start_idx, self.ptr)
+        rews = np.append(self.rew_buf[path_slice], last_val)
+        vals = np.append(self.val_buf[path_slice], last_val)
         
-        advs = []
-        #print(rews.shape)
         # the next two lines implement GAE-Lambda advantage calculation
-        for i in range(len(rews)):
-            deltas = rews[i,:-1] + self.gamma * vals[i, 1:] - vals[i, :-1]
-            #print(deltas.shape)
-            #print(deltas.shape)
-            advs.append(core.discount_cumsum(deltas, self.gamma * self.lam))
-            #print(np.asarray(advs).shape)
-        self.adv_buf = advs
-
-        rets = []
-        for i in range(len(rews)):
-            rets.append(core.discount_cumsum(rews[i], self.gamma)[:-1])
-        self.ret_buf = rets
-        #self.ret_buf = np.sum(self.rew_buf, axis=0) #np.asarray(rets)
+        deltas = rews[:-1] + self.gamma * vals[1:] - vals[:-1]
+        self.adv_buf[path_slice] = core.discount_cumsum(deltas, self.gamma * self.lam)
+        
         # the next line computes rewards-to-go, to be targets for the value function
-        #self.ret_buf[path_slice] = core.discount_cumsum(rews, self.gamma)[:-1]
-        #self.ret_buf.append(ep_ret_dist)
+        self.ret_buf[path_slice] = core.discount_cumsum(rews, self.gamma)[:-1]
+        
         self.path_start_idx = self.ptr
 
     def get(self):
@@ -102,7 +76,6 @@ class VPGBuffer:
         assert self.ptr == self.max_size    # buffer has to be full before you can get
         self.ptr, self.path_start_idx = 0, 0
         # the next two lines implement the advantage normalization trick
-        print(np.asarray(self.adv_buf).shape)
         adv_mean, adv_std = mpi_statistics_scalar(self.adv_buf)
         self.adv_buf = (self.adv_buf - adv_mean) / adv_std
         data = dict(obs=self.obs_buf, act=self.act_buf, ret=self.ret_buf,
@@ -111,31 +84,20 @@ class VPGBuffer:
 
 
 
-def reward_to_go(rews):
-    n = len(rews)
-    rtgs = np.zeros_like(rews)
-    for i in reversed(range(n)):
-        rtgs[i] = rews[i] + (rtgs[i+1] if i+1 < n else 0)
-    return rtgs
-
-def vpg(env_fn, reward_dist, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),  seed=0, 
+def vpg(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), render=False, seed=0, 
         steps_per_epoch=4000, epochs=50, gamma=0.99, pi_lr=3e-4,
         vf_lr=1e-3, train_v_iters=80, lam=0.97, max_ep_len=1000,
-        logger_kwargs=dict(), save_freq=10, alpha=0.95):
+        logger_kwargs=dict(), save_freq=10):
     """
     Vanilla Policy Gradient 
-
     (with GAE-Lambda for advantage estimation)
-
     Args:
         env_fn : A function which creates a copy of the environment.
             The environment must satisfy the OpenAI Gym API.
-
         actor_critic: The constructor method for a PyTorch Module with a 
             ``step`` method, an ``act`` method, a ``pi`` module, and a ``v`` 
             module. The ``step`` method should accept a batch of observations 
             and return:
-
             ===========  ================  ======================================
             Symbol       Shape             Description
             ===========  ================  ======================================
@@ -146,12 +108,9 @@ def vpg(env_fn, reward_dist, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),
             ``logp_a``   (batch,)          | Numpy array of log probs for the
                                            | actions in ``a``.
             ===========  ================  ======================================
-
             The ``act`` method behaves the same as ``step`` but only returns ``a``.
-
             The ``pi`` module's forward call should accept a batch of 
             observations and optionally a batch of actions, and return:
-
             ===========  ================  ======================================
             Symbol       Shape             Description
             ===========  ================  ======================================
@@ -165,10 +124,8 @@ def vpg(env_fn, reward_dist, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),
                                            | If actions not given, will contain
                                            | ``None``.
             ===========  ================  ======================================
-
             The ``v`` module's forward call should accept a batch of observations
             and return:
-
             ===========  ================  ======================================
             Symbol       Shape             Description
             ===========  ================  ======================================
@@ -176,37 +133,24 @@ def vpg(env_fn, reward_dist, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),
                                            | for the provided observations. (Critical: 
                                            | make sure to flatten this!)
             ===========  ================  ======================================
-
         ac_kwargs (dict): Any kwargs appropriate for the ActorCritic object 
             you provided to VPG.
-
         seed (int): Seed for random number generators.
-
         steps_per_epoch (int): Number of steps of interaction (state-action pairs) 
             for the agent and the environment in each epoch.
-
         epochs (int): Number of epochs of interaction (equivalent to
             number of policy updates) to perform.
-
         gamma (float): Discount factor. (Always between 0 and 1.)
-
         pi_lr (float): Learning rate for policy optimizer.
-
         vf_lr (float): Learning rate for value function optimizer.
-
         train_v_iters (int): Number of gradient descent steps to take on 
             value function per epoch.
-
         lam (float): Lambda for GAE-Lambda. (Always between 0 and 1,
             close to 1.)
-
         max_ep_len (int): Maximum length of trajectory / episode / rollout.
-
         logger_kwargs (dict): Keyword args for EpochLogger.
-
         save_freq (int): How often (in terms of gap between epochs) to save
             the current policy and value function.
-
     """
 
     # Special function to avoid certain slowdowns from PyTorch + MPI combo.
@@ -227,8 +171,7 @@ def vpg(env_fn, reward_dist, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),
     act_dim = env.action_space.shape
 
     # Create actor-critic module
-    num_rew_fns = len(reward_dist.get_reward_distribution(np.zeros(obs_dim)))
-    ac = actor_critic(env.observation_space, env.action_space, num_rew_fns, **ac_kwargs)
+    ac = actor_critic(env.observation_space, env.action_space, **ac_kwargs)
 
     # Sync params across processes
     sync_params(ac)
@@ -242,18 +185,12 @@ def vpg(env_fn, reward_dist, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),
     buf = VPGBuffer(obs_dim, act_dim, local_steps_per_epoch, gamma, lam)
 
     # Set up function for computing VPG policy loss
-    def compute_loss_pi(data, wts):
+    def compute_loss_pi(data):
         obs, act, adv, logp_old = data['obs'], data['act'], data['adv'], data['logp']
 
         # Policy loss
-        #print(wts)
         pi, logp = ac.pi(obs, act)
-        wts = torch.from_numpy(wts)
-        print(logp.size())
-        print(adv.size())
-        print(wts.size())
-        # TODO: implement correct loss
-        loss_pi = -(logp * adv * wts).mean()
+        loss_pi = -(logp * adv).mean()
 
         # Useful extra info
         approx_kl = (logp_old - logp).mean().item()
@@ -262,43 +199,14 @@ def vpg(env_fn, reward_dist, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),
 
         return loss_pi, pi_info
 
-    def compute_broil_weights(batch_rets, batch_rtgs):
-        #print(buf.ret_buf)
-        #print(batch_rets)
-        #batch_rets = buf.ret_buf #np.sum(buf.ret_buf, axis = 0)
-        #batch_rtgs = buf.rtgs #buf.ret_buf
-        #batch_rtgs =   
-        #batch_rtgs = core.discount_cumsum(buf.rew_buf[slice(buf.path_start_idx, buf.ptr)], gamma)
-        print("Rets {}".format(np.asarray(batch_rets).shape))
-        print("Rtgs {}".format(np.asarray(batch_rtgs).shape))
-        exp_batch_rets = np.mean(batch_rets, axis=0)
-        posterior_reward_weights = reward_dist.posterior
-
-        #print(posterior_reward_weights)
-
-        sigma, cvar = cvar_enumerate_pg(exp_batch_rets, posterior_reward_weights, alpha)
-
-        broil_wts = np.zeros(len(batch_rtgs))
-        for i,prob_r in enumerate(posterior_reward_weights):
-            if sigma > exp_batch_rets[i]:
-                w_r_i = lam+(1-lam)/(1-alpha)
-            else:
-                w_r_i = lam
-
-            broil_wts += prob_r*w_r_i*np.array(batch_rtgs)[:,i]
-
-        return broil_wts
-
     # Set up function for computing value loss
     def compute_loss_v(data):
         obs, ret = data['obs'], data['ret']
-        print(ret)
-        #TODO: implement correct loss
         return ((ac.v(obs) - ret)**2).mean()
 
     # Set up optimizers for policy and value function
     pi_optimizer = Adam(ac.pi.parameters(), lr=pi_lr)
-    vf_optimizers = [Adam(ac.v.v_nets[i].parameters(), lr=vf_lr) for i in range(num_rew_fns)]
+    vf_optimizer = Adam(ac.v.parameters(), lr=vf_lr)
 
     # Set up model saving
     logger.setup_pytorch_saver(ac)
@@ -307,15 +215,13 @@ def vpg(env_fn, reward_dist, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),
         data = buf.get()
 
         # Get loss and info values before update
-        wts_old = compute_broil_weights(batch_rets, batch_rtgs)
-        pi_l_old, pi_info_old = compute_loss_pi(data, wts_old)
+        pi_l_old, pi_info_old = compute_loss_pi(data)
         pi_l_old = pi_l_old.item()
         v_l_old = compute_loss_v(data).item()
 
         # Train policy with a single step of gradient descent
         pi_optimizer.zero_grad()
-        wts = compute_broil_weights(batch_rets, batch_rtgs)
-        loss_pi, pi_info = compute_loss_pi(data, wts)
+        loss_pi, pi_info = compute_loss_pi(data)
         loss_pi.backward()
         mpi_avg_grads(ac.pi)    # average grads across MPI processes
         pi_optimizer.step()
@@ -335,30 +241,21 @@ def vpg(env_fn, reward_dist, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),
                      DeltaLossPi=(loss_pi.item() - pi_l_old),
                      DeltaLossV=(loss_v.item() - v_l_old))
 
-
     # Prepare for interaction with environment
     start_time = time.time()
     o, ep_ret, ep_len = env.reset(), 0, 0
 
-    #batch_rets = []
-    #batch_rews = []
     # Main loop: collect experience in env and update/log each epoch
     for epoch in range(epochs):
-        ep_rews = []
-        batch_rets = []
-        batch_rtgs = []
         for t in range(local_steps_per_epoch):
             a, v, logp = ac.step(torch.as_tensor(o, dtype=torch.float32))
 
             next_o, r, d, _ = env.step(a)
-            #ep_ret += r
-            #ep_len += 1
-
-            rew_dist = reward_dist.get_reward_distribution(o)
-            ep_rews.append(rew_dist)
+            ep_ret += r
+            ep_len += 1
 
             # save and log
-            buf.store(o, a, rew_dist, v, logp)
+            buf.store(o, a, r, v, logp)
             logger.store(VVals=v)
             
             # Update obs (critical!)
@@ -368,16 +265,12 @@ def vpg(env_fn, reward_dist, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),
             terminal = d or timeout
             epoch_ended = t==local_steps_per_epoch-1
 
+            if render:
+                env.render()
+
             if terminal or epoch_ended:
-                ep_ret_dist, ep_len = np.sum(ep_rews, axis=0), len(ep_rews)
-                batch_rets.append(ep_ret_dist)
-                batch_rtgs.extend(reward_to_go(ep_rews))
-                #print(ep_ret_dist)
-                #if type(ep_ret_dist) != int:
-                 #   buf.ret_buf.append(ep_ret_dist)
                 if epoch_ended and not(terminal):
                     print('Warning: trajectory cut off by epoch at %d steps.'%ep_len, flush=True)
-                    #buf.rew_buf = []
                 # if trajectory didn't reach terminal state, bootstrap value target
                 if timeout or epoch_ended:
                     _, v, _ = ac.step(torch.as_tensor(o, dtype=torch.float32))
@@ -415,7 +308,7 @@ def vpg(env_fn, reward_dist, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--env', type=str, default='CartPole-v0')
+    parser.add_argument('--env', type=str, default='HalfCheetah-v2')
     parser.add_argument('--hid', type=int, default=64)
     parser.add_argument('--l', type=int, default=2)
     parser.add_argument('--gamma', type=float, default=0.99)
@@ -424,17 +317,15 @@ if __name__ == '__main__':
     parser.add_argument('--steps', type=int, default=4000)
     parser.add_argument('--epochs', type=int, default=50)
     parser.add_argument('--exp_name', type=str, default='vpg')
-    parser.add_argument('--alpha', type=float, default=0.95)
+    parser.add_argument('--render', type=bool, default=False)
     args = parser.parse_args()
 
     mpi_fork(args.cpu)  # run parallel code with mpi
 
-    from run_utils import setup_logger_kwargs
+    from spinup.utils.run_utils import setup_logger_kwargs
     logger_kwargs = setup_logger_kwargs(args.exp_name, args.seed)
 
-    reward_dist = CartPoleReward()
-
-    vpg(lambda : gym.make(args.env), reward_dist=reward_dist, actor_critic=core.BROILActorCritic,
+    vpg(lambda : gym.make(args.env), actor_critic=core.MLPActorCritic, render=args.render,
         ac_kwargs=dict(hidden_sizes=[args.hid]*args.l), gamma=args.gamma, 
         seed=args.seed, steps_per_epoch=args.steps, epochs=args.epochs,
-        logger_kwargs=logger_kwargs, alpha=args.alpha)
+        logger_kwargs=logger_kwargs)

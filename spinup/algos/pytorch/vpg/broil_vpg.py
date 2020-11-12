@@ -11,6 +11,7 @@ from spinup.examples.pytorch.broil_rtg_pg_v2.cartpole_reward_utils import CartPo
 from spinup.examples.pytorch.broil_rtg_pg_v2.cvar_utils import cvar_enumerate_pg
 
 
+
 class VPGBuffer:
     """
     A buffer for storing trajectories experienced by a VPG agent interacting
@@ -120,7 +121,7 @@ def reward_to_go(rews):
         rtgs[i] = rews[i] + (rtgs[i+1] if i+1 < n else 0)
     return rtgs
 
-def vpg(env_fn, reward_dist, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),  seed=0, 
+def vpg(env_fn, reward_dist, render=False, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),  seed=0, 
         steps_per_epoch=4000, epochs=50, gamma=0.99, pi_lr=3e-4,
         vf_lr=1e-3, train_v_iters=80, lam=0.97, max_ep_len=1000,
         logger_kwargs=dict(), save_freq=10, alpha=0.95):
@@ -134,7 +135,7 @@ def vpg(env_fn, reward_dist, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),
             The environment must satisfy the OpenAI Gym API.
 
         actor_critic: The constructor method for a PyTorch Module with a 
-            ``step`` method, an ``act`` method, a ``pi`` module, and a ``v`` 
+            ``step`` method, an ``act`` method, a ``pi`` module, and a ``v``
             module. The ``step`` method should accept a batch of observations 
             and return:
 
@@ -251,9 +252,9 @@ def vpg(env_fn, reward_dist, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),
         #print(wts)
         pi, logp = ac.pi(obs, act)
         wts = torch.from_numpy(wts)
-        print(logp.size())
-        print(adv.T.size())
-        print(wts.size())
+        #print(logp.size())
+        #print(adv.T.size())
+        #print(wts.size())
 
         loss_pi = 0
         for i in range(adv.size()[0]):
@@ -276,10 +277,10 @@ def vpg(env_fn, reward_dist, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),
         #batch_rtgs = buf.rtgs #buf.ret_buf
         #batch_rtgs =   
         #batch_rtgs = core.discount_cumsum(buf.rew_buf[slice(buf.path_start_idx, buf.ptr)], gamma)
-        print("Rets {}".format(np.asarray(batch_rets).shape))
+        #print("Rets {}".format(np.asarray(batch_rets).shape))
 
         batch_rtgs = buf.adv_buf
-        print("Rtgs {}".format(np.asarray(batch_rtgs).shape))
+        #print("Rtgs {}".format(np.asarray(batch_rtgs).shape))
         exp_batch_rets = np.mean(batch_rets, axis=0)
         posterior_reward_weights = reward_dist.posterior
 
@@ -296,6 +297,7 @@ def vpg(env_fn, reward_dist, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),
 
             broil_wts += prob_r*w_r_i*np.array(batch_rtgs)[:,i]
 
+        print(broil_wts)
         return broil_wts
 
     # Set up function for computing value loss
@@ -376,7 +378,7 @@ def vpg(env_fn, reward_dist, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),
             else:
                 right_ac += 1
             next_o, r, d, _ = env.step(a)
-            #ep_ret += r
+            ep_ret += r
             #ep_len += 1
 
             rew_dist = reward_dist.get_reward_distribution(o)
@@ -392,6 +394,9 @@ def vpg(env_fn, reward_dist, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),
             timeout = ep_len == max_ep_len
             terminal = d or timeout
             epoch_ended = t==local_steps_per_epoch-1
+
+            if render:
+                env.render()
 
             if terminal or epoch_ended:
                 ep_ret_dist, ep_len = np.sum(ep_rews, axis=0), len(ep_rews)
@@ -411,7 +416,8 @@ def vpg(env_fn, reward_dist, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),
                 buf.finish_path(v)
                 if terminal:
                     # only save EpRet / EpLen if trajectory finished
-                    logger.store(EpRet=np.dot(ep_ret_dist,np.mean(batch_rets,axis=0)), EpLen=ep_len)
+                    #np.dot(ep_ret_dist,np.mean(batch_rets,axis=0))
+                    logger.store(EpRet=ep_ret, EpLen=ep_len)
                     #print("Left {}".format(left_ac))
                     #print("Right {}".format(right_ac))
                 o, ep_ret, ep_len = env.reset(), 0, 0
@@ -453,6 +459,7 @@ if __name__ == '__main__':
     parser.add_argument('--exp_name', type=str, default='vpg')
     parser.add_argument('--alpha', type=float, default=0.95)
     parser.add_argument('--lam', type=float, default=0.9)
+    parser.add_argument('--render', type=bool, default=False)
     args = parser.parse_args()
 
     mpi_fork(args.cpu)  # run parallel code with mpi
@@ -462,7 +469,7 @@ if __name__ == '__main__':
 
     reward_dist = CartPoleReward()
 
-    vpg(lambda : gym.make(args.env), reward_dist=reward_dist, actor_critic=core.BROILActorCritic,
+    vpg(lambda : gym.make(args.env), reward_dist=reward_dist, render=args.render, actor_critic=core.BROILActorCritic,
         ac_kwargs=dict(hidden_sizes=[args.hid]*args.l), gamma=args.gamma, lam=args.lam,
         seed=args.seed, steps_per_epoch=args.steps, epochs=args.epochs,
         logger_kwargs=logger_kwargs, alpha=args.alpha)
