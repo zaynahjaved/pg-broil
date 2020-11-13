@@ -77,18 +77,18 @@ class VPGBuffer:
             vals = np.vstack((np.asarray(self.val_buf), last_val))
         
         advs = []
-        # the next two lines implement GAE-Lambda advantage calculation
+        # the next two lines implement GAE-Lambda advantage calculation #TODO: see if we can vectorize this
         for i in range(rews.shape[1]):
-            deltas = rews[:-1,i] + self.gamma * vals[i, 1:] - vals[i, :-1]
+            deltas = rews[:-1, i] + self.gamma * vals[1:, i] - vals[:-1, i]
             #print(deltas.shape)
             advs.append(core.discount_cumsum(deltas, self.gamma * self.lam))
             #print(np.asarray(advs).shape)
         #print(np.asarray(advs).shape)
         self.adv_buf = advs
 
-        rets = []
-        for i in range(len(rews)):
-            rets.append(core.discount_cumsum(rews[i], self.gamma)[:-1])
+        rets = [] #TODO: see if we can vectorize
+        for i in range(len(rews[0])):
+            rets.append(core.discount_cumsum(rews[:,i], self.gamma)[:-1])
         self.ret_buf = rets
         #self.ret_buf = np.sum(self.rew_buf, axis=0) #np.asarray(rets)
         # the next line computes rewards-to-go, to be targets for the value function
@@ -421,7 +421,7 @@ def vpg(env_fn, reward_dist, render=False, actor_critic=core.MLPActorCritic, ac_
                     #print("Left {}".format(left_ac))
                     #print("Right {}".format(right_ac))
                 o, ep_ret, ep_len = env.reset(), 0, 0
-
+                ep_rews = []
 
         # Save model
         if (epoch % save_freq == 0) or (epoch == epochs-1):
@@ -458,8 +458,9 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type=int, default=50)
     parser.add_argument('--exp_name', type=str, default='vpg')
     parser.add_argument('--alpha', type=float, default=0.95)
-    parser.add_argument('--lam', type=float, default=0.9)
+    parser.add_argument('--lam', type=float, default=0.5)
     parser.add_argument('--render', type=bool, default=False)
+    parser.add_argument('--policy_lr', type=float, default=1e-2, help="learning rate for policy")
     args = parser.parse_args()
 
     mpi_fork(args.cpu)  # run parallel code with mpi
@@ -472,4 +473,5 @@ if __name__ == '__main__':
     vpg(lambda : gym.make(args.env), reward_dist=reward_dist, render=args.render, actor_critic=core.BROILActorCritic,
         ac_kwargs=dict(hidden_sizes=[args.hid]*args.l), gamma=args.gamma, lam=args.lam,
         seed=args.seed, steps_per_epoch=args.steps, epochs=args.epochs,
+        pi_lr=args.policy_lr,
         logger_kwargs=logger_kwargs, alpha=args.alpha)

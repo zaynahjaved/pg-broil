@@ -174,15 +174,18 @@ class BROILCritic(nn.Module):
 
     def __init__(self, obs_dim, hidden_sizes, activation, num_rew_fns):
         super().__init__()
-        self.v_nets = [mlp([obs_dim] + list(hidden_sizes) + [1], activation) for i in range(num_rew_fns)]
+        self.v_nets = nn.ModuleList()
+        for i in range(num_rew_fns):
+            self.v_nets.append(mlp([obs_dim] + list(hidden_sizes) + [1], activation)) 
 
     def forward(self, obs):
         vals = []
         for v_net in self.v_nets:
-            v = torch.squeeze(v_net(obs), -1)
+            #v = torch.squeeze(v_net(obs), -1)
+            v = v_net(obs)
             vals.append(v)
-            
-        return vals
+        val_tensor = torch.stack(vals, dim=1).squeeze()
+        return val_tensor
 
 
 
