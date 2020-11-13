@@ -5,7 +5,9 @@ from torch.distributions.normal import Normal
 from torch.optim import Adam
 import numpy as np
 import gym
+import copy
 from gym.spaces import Discrete, Box
+from spinup.envs.pointbot import *
 
 from spinup.examples.pytorch.broil_rtg_pg_v2.cvar_utils import cvar_enumerate_pg
 from spinup.examples.pytorch.broil_rtg_pg_v2.pointbot_reward_utils import PointBotReward
@@ -96,13 +98,39 @@ def train(reward_dist, lamda, alpha=0.95, env_name='CartPole-v0', hidden_sizes=[
 
         return broil_weights,cvar
 
-
-
-
-
-
-
-
+    def n_policy_exe(n):
+        # reset episode-specific variables
+        obs = env.reset()       # first obs comes from starting distribution
+        done = False            # signal from environment that episode is over
+        ep_rews = []            # list for rewards accrued throughout ep
+        states = []
+        # render first episode of each epoch
+        finished_rendering_this_epoch = False
+        for i in range(n):
+            # collect experience by acting in the environment with current policy
+            while True:
+                # rendering
+                if (not finished_rendering_this_epoch) and render:
+                    env.render()
+                    #print(obs[0])
+                # act in the environment
+                act = get_action(torch.as_tensor(obs, dtype=torch.float32))
+                obs, rew, done, _ = env.step(act)
+                ## old code from normal policy gradient:
+                ## ep_rews.append(rew)
+                #### New code for BROIL
+                rew_dist = reward_dist.get_reward_distribution(env, obs) #S create reward
+                ep_rews.append(rew_dist)
+                ####
+                if done:
+                    # if episode is over, record info about episode
+                    states.append(copy.deepcopy(env.hist))
+                    obs, done, ep_rews = env.reset(), False, []
+                    # won't render again this epoch
+                    finished_rendering_this_epoch = True
+                    # end experience loop if we have enough of it
+                    break
+        return states
 
 
     # make optimizer
@@ -163,13 +191,12 @@ def train(reward_dist, lamda, alpha=0.95, env_name='CartPole-v0', hidden_sizes=[
                 # the weight for each logprob(a_t|s_t) is reward-to-go from t
                 #### we are now computing this for every element in the reward function posterior but we can use the same function
                 batch_rewards_to_go.extend(reward_to_go(ep_rews))
-
                 # reset episode-specific variables
                 obs, done, ep_rews = env.reset(), False, []
 
                 # won't render again this epoch
                 finished_rendering_this_epoch = True
-
+                
                 # end experience loop if we have enough of it
                 if len(batch_obs) > batch_size:
                     break
@@ -177,6 +204,7 @@ def train(reward_dist, lamda, alpha=0.95, env_name='CartPole-v0', hidden_sizes=[
         #### take a single BROIL policy gradient update step
         broil_weights, cvar = compute_broil_weights(batch_rets, batch_rewards_to_go)
         ####
+        
         optimizer.zero_grad()
         batch_loss = compute_loss(obs=torch.as_tensor(batch_obs, dtype=torch.float32),
                                   act=torch.FloatTensor(np.vstack(batch_acts)),
@@ -211,7 +239,8 @@ def train(reward_dist, lamda, alpha=0.95, env_name='CartPole-v0', hidden_sizes=[
     plt.figure()
     plt.plot(wc_ret_list)
     plt.title("worst case return")
-
+    states = n_policy_exe(5)
+    env.plot_trajectory(states = states)
     plt.show()
 
 if __name__ == '__main__':
@@ -236,3 +265,4 @@ if __name__ == '__main__':
     reward_dist = PointBotReward()
 
     train(reward_dist, args.lamda, args.alpha, env_name=args.env_name, epochs=args.epochs, render=args.render, lr=args.lr)
+    
