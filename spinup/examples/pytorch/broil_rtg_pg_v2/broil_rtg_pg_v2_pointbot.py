@@ -249,7 +249,7 @@ if __name__ == '__main__':
     parser.add_argument('--env_name', '--env', type=str, default='PointBot-v0')
     parser.add_argument('--render', action='store_true')
     parser.add_argument('--alpha', default=0.8, type=float, help="alpha for alpha CVaR")
-    parser.add_argument('--lamda', default = 0.1, type=float, help='blending between exp return (lamda=1) and cvar maximization (lamda=0)')
+    parser.add_argument('--lamda', default = 1, type=float, help='blending between exp return (lamda=1) and cvar maximization (lamda=0)')
     parser.add_argument('--lr', type=float, default=1e-2)
     parser.add_argument('--epochs', type=int, default=100)
     args = parser.parse_args()

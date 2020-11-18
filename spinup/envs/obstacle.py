@@ -34,7 +34,6 @@ class Obstacle:
             # return (self.boundsx[0] <= x[0] <= self.boundsx[1] and self.boundsy[0] <= x[2] <= self.boundsy[1]) * 10000
 
 class ComplexObstacle(Obstacle):
-
     def __init__(self, bounds):
         self.obs = []
         for boundsx, boundsy in bounds:
