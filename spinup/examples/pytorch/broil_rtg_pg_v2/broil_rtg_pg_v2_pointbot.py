@@ -8,6 +8,7 @@ import gym
 import copy
 from gym.spaces import Discrete, Box
 from spinup.envs.pointbot import *
+import datetime
 
 from spinup.examples.pytorch.broil_rtg_pg_v2.cvar_utils import cvar_enumerate_pg
 from spinup.examples.pytorch.broil_rtg_pg_v2.pointbot_reward_utils import PointBotReward
@@ -30,7 +31,7 @@ def reward_to_go(rews):
     return rtgs
 
 def train(reward_dist, lamda, alpha=0.95, env_name='CartPole-v0', hidden_sizes=[32], lr=1e-2,
-          epochs=50, batch_size=5000, render=False):
+          epochs=50, batch_size=5000, render=False, grid_search=False):
 
     # make environment, check spaces, get obs / act dims
     env = gym.make(env_name)
@@ -198,7 +199,7 @@ def train(reward_dist, lamda, alpha=0.95, env_name='CartPole-v0', hidden_sizes=[
 
                 # won't render again this epoch
                 finished_rendering_this_epoch = True
-                
+
                 # end experience loop if we have enough of it
                 if len(batch_obs) > batch_size:
                     break
@@ -231,18 +232,47 @@ def train(reward_dist, lamda, alpha=0.95, env_name='CartPole-v0', hidden_sizes=[
                 (i, batch_loss, exp_ret, cvar, worst_case_return, np.mean(batch_lens)))
 
     import matplotlib.pyplot as plt
-    plt.figure()
-    plt.plot(cvar_list)
-    plt.title("conditional value at risk")
-    plt.figure()
-    plt.plot(exp_ret_list)
-    plt.title("expected return")
-    plt.figure()
-    plt.plot(wc_ret_list)
-    plt.title("worst case return")
-    states = n_policy_exe(5)
-    env.plot_entire_trajectory(states = states)
-    plt.show()
+
+    if grid_search:
+        date = datetime.date.today()
+        date = str(date).replace('-', '_')
+        experiment_name = env_name + '_alpha_' + str(alpha) + '_lambda_' + str(lamda) + '_grid_' + date
+        metrics = {"conditional value at risk": ('_cvar', cvar_list),
+                   "expected return": ('_expected_return', exp_ret_list),
+                   "worst case return": ('_worst_case_return', wc_ret_list)}
+        for metric, result in metrics.items():
+            file_metric_description, results = result
+
+            if metric == "expected return":
+                # Note: create the visualizations inside folder broil_data/graphs
+                plt.figure()
+                states = n_policy_exe(5)
+                env.plot_entire_trajectory(states = states)
+                plt.title(metric + ' alpha = ' + str(alpha) + ' lambda = ' + str(lamda))
+                plt.savefig('broil_data/graphs/' + experiment_name + file_metric_description + '.jpg')
+
+            # Note: create data files inside folder broil_data/results
+            with open('broil_data/results/' + experiment_name + file_metric_description + '.txt', 'w') as f:
+                for item in results:
+                    f.write("%s\n" % item)
+
+        print(' Data from experiment: ', experiment_name, ' saved.')
+    else:
+        plt.figure()
+        plt.plot(cvar_list)
+        plt.title("conditional value at risk")
+        plt.figure()
+        plt.plot(exp_ret_list)
+        plt.title("expected return")
+        plt.figure()
+        plt.plot(wc_ret_list)
+        plt.title("worst case return")
+
+        #Create Visualization
+        states = n_policy_exe(5)
+        env.plot_entire_trajectory(states = states)
+
+        plt.show()
 
 
 if __name__ == '__main__':
@@ -254,6 +284,7 @@ if __name__ == '__main__':
     parser.add_argument('--lamda', default = 0.1, type=float, help='blending between exp return (lamda=1) and cvar maximization (lamda=0)')
     parser.add_argument('--lr', type=float, default=1e-2)
     parser.add_argument('--epochs', type=int, default=100)
+    parser.add_argument('--grid_search', type=bool, default=False)
     args = parser.parse_args()
     print('\nUsing reward-to-go formulation of BROIL policy gradient.\n')
     #print('\nUsing only two reward functions in posterior')
@@ -266,4 +297,17 @@ if __name__ == '__main__':
     #create reward function distribution
     reward_dist = PointBotReward()
 
-    train(reward_dist, args.lamda, args.alpha, env_name=args.env_name, epochs=args.epochs, render=args.render, lr=args.lr)
+    torch.manual_seed(1)
+    np.random.seed(1)
+    reward_dist = PointBotReward()
+    alpha_resolution = .2
+    lamda_resolution = .2
+    alpha_search = [np.round(i * alpha_resolution, 2) for i in range(int(1 / alpha_resolution) + 1)]
+    lamda_search = [np.round(i * lamda_resolution, 2) for i in range(int(1 / lamda_resolution) + 1)]
+    if args.grid_search:
+        for a in alpha_search:
+            for l in lamda_search:
+                print('\nStarting experiment with alpha=', str(a), ' lambda=', str(l), '\n')
+                train(reward_dist, l, a, env_name=args.env_name, epochs=args.epochs, render=args.render, lr=args.lr, grid_search=args.grid_search)
+    else:
+        train(reward_dist, args.lamda, args.alpha, env_name=args.env_name, epochs=args.epochs, render=args.render, lr=args.lr, grid_search=args.grid_search)
