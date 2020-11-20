@@ -224,7 +224,7 @@ def train(reward_dist, lamda, alpha=0.95, env_name='CartPole-v0', hidden_sizes=[
     for i in range(epochs):
         batch_loss, batch_rets, batch_lens, cvar = train_one_epoch()
         exp_ret = np.dot(np.mean(batch_rets,axis=0),reward_dist.posterior)
-        worst_case_return = np.min(np.mean(batch_rets))
+        worst_case_return = np.min(np.mean(batch_rets, axis=1))
         cvar_list.append(cvar)
         exp_ret_list.append(exp_ret)
         wc_ret_list.append(worst_case_return)
@@ -249,7 +249,7 @@ def train(reward_dist, lamda, alpha=0.95, env_name='CartPole-v0', hidden_sizes=[
                 states = n_policy_exe(5)
                 env.plot_entire_trajectory(states = states)
                 plt.title(metric + ' alpha = ' + str(alpha) + ' lambda = ' + str(lamda))
-                plt.savefig('broil_data/graphs/' + experiment_name + file_metric_description + '.jpg')
+                plt.savefig('broil_data/graphs/' + experiment_name + file_metric_description + '.png')
 
             # Note: create data files inside folder broil_data/results
             with open('broil_data/results/' + experiment_name + file_metric_description + '.txt', 'w') as f:
@@ -283,7 +283,7 @@ if __name__ == '__main__':
     parser.add_argument('--alpha', default=0.8, type=float, help="alpha for alpha CVaR")
     parser.add_argument('--lamda', default = 0.1, type=float, help='blending between exp return (lamda=1) and cvar maximization (lamda=0)')
     parser.add_argument('--lr', type=float, default=1e-2)
-    parser.add_argument('--epochs', type=int, default=100)
+    parser.add_argument('--epochs', type=int, default=50)
     parser.add_argument('--grid_search', type=bool, default=False)
     args = parser.parse_args()
     print('\nUsing reward-to-go formulation of BROIL policy gradient.\n')
