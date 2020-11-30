@@ -186,11 +186,12 @@ def vpg(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(
 
     # Instantiate environment
     env = env_fn()
+    #print(env.unwrapped.get_action_meanings())
     obs_dim = env.observation_space.shape
     act_dim = env.action_space.shape
 
     # Create BROIL actor-critic module
-    num_rew_fns = len(reward_dist.get_reward_distribution(np.zeros(obs_dim)))
+    num_rew_fns = len(reward_dist.get_reward_distribution(env,np.zeros(obs_dim)))
     ac = actor_critic(env.observation_space, env.action_space, num_rew_fns, **ac_kwargs)
 
     # Sync params across processes
@@ -253,7 +254,7 @@ def vpg(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(
         ent = pi.entropy().mean().item()
         pi_info = dict(kl=approx_kl, ent=ent)
 
-        return loss_pi, pi_info
+        return loss_pi, pi_info, cvar
 
     # Set up function for computing value loss for a particular reward function value estimator
     # def compute_loss_v(data, reward_index):
@@ -281,13 +282,13 @@ def vpg(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(
         data = buf.get()
 
         # Get loss and info values before update
-        pi_l_old, pi_info_old = compute_loss_pi(data)
+        pi_l_old, pi_info_old, cvar = compute_loss_pi(data)
         pi_l_old = pi_l_old.item()
         v_l_old = compute_loss_v(data).item()
 
         # Train policy with a single step of gradient descent
         pi_optimizer.zero_grad()
-        loss_pi, pi_info = compute_loss_pi(data)
+        loss_pi, pi_info, cvar = compute_loss_pi(data)
         loss_pi.backward()
         mpi_avg_grads(ac.pi)    # average grads across MPI processes
         pi_optimizer.step()
@@ -305,7 +306,8 @@ def vpg(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(
         logger.store(LossPi=pi_l_old, LossV=v_l_old,
                      KL=kl, Entropy=ent,
                      DeltaLossPi=(loss_pi.item() - pi_l_old),
-                     DeltaLossV=(loss_v.item() - v_l_old))
+                     DeltaLossV=(loss_v.item() - v_l_old), CVaR=cvar,
+                     BROILObj=broil_lambda*np.mean(buf.posterior_returns)+(1-broil_lambda)*cvar)
 
     # Prepare for interaction with environment
     start_time = time.time()
@@ -337,7 +339,7 @@ def vpg(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(
             if render and first_rollout:
                 env.render()
                 time.sleep(0.01)
-                #print("cart position", o[0])
+                print("cart position", o[0])
                 
                 
 
@@ -376,10 +378,12 @@ def vpg(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(
         logger.log_tabular('DeltaLossPi', average_only=True)
         logger.log_tabular('DeltaLossV', average_only=True)
         logger.log_tabular('Entropy', average_only=True)
+        logger.log_tabular('CVaR', average_only=True)
+        logger.log_tabular('BROILObj', average_only=True)
         logger.log_tabular('KL', average_only=True)
         logger.log_tabular('Time', time.time()-start_time)
         logger.dump_tabular()
-
+    env.plot_entire_trajectory()
 if __name__ == '__main__':
     import argparse
     import time
@@ -401,7 +405,7 @@ if __name__ == '__main__':
 
     mpi_fork(args.cpu)  # run parallel code with mpi
 
-    from spinup.utils.run_utils import setup_logger_kwargs
+    from run_utils import setup_logger_kwargs
     logger_kwargs = setup_logger_kwargs(args.exp_name, args.seed)
 
     reward_dist = CartPoleReward()
