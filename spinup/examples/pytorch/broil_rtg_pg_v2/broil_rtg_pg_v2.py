@@ -186,7 +186,7 @@ def train(reward_dist, lamda, alpha=0.95, env_name='CartPole-v0', hidden_sizes=[
     for i in range(epochs):
         batch_loss, batch_rets, batch_lens, cvar = train_one_epoch()
         exp_ret = np.dot(np.mean(batch_rets,axis=0),reward_dist.posterior)
-        worst_case_return = np.min(np.mean(batch_rets))
+        worst_case_return = np.min(np.mean(batch_rets, axis=0))
         cvar_list.append(cvar)
         exp_ret_list.append(exp_ret)
         wc_ret_list.append(worst_case_return)

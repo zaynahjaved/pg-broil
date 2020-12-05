@@ -16,12 +16,12 @@ HORIZON = 100
 NOISE_SCALE = 0.05
 AIR_RESIST = 0.2
 
-COLLISION_COST = 10
-MODE = 3
+COLLISION_COST = 0
+MODE = 2
 
 OBSTACLE = {
 	1: ComplexObstacle([[[-1000, -999], [-1000, -999]]]),
-	2: ComplexObstacle([[[-30, -20], [-20, 20]]]),
+	2: ComplexObstacle([[[-30, -20], [-20, 10]]]),
 	3: ComplexObstacle([[[-30, -20], [-20, -10]], [[-30, -20], [0, 20]]]),
 	4: ComplexObstacle([[[-30, -20], [-20, 20]], [[-20, 5], [10, 20]], [[0, 5], [5, 10]], [[-20, 5], [-20, -10]]])
 }

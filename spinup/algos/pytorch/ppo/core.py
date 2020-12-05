@@ -30,14 +30,14 @@ def discount_cumsum(x, discount):
     """
     magic from rllab for computing discounted cumulative sums of vectors.
 
-    input: 
-        vector x, 
-        [x0, 
-         x1, 
+    input:
+        vector x,
+        [x0,
+         x1,
          x2]
 
     output:
-        [x0 + discount * x1 + discount^2 * x2,  
+        [x0 + discount * x1 + discount^2 * x2,
          x1 + discount * x2,
          x2]
     """
@@ -53,7 +53,7 @@ class Actor(nn.Module):
         raise NotImplementedError
 
     def forward(self, obs, act=None):
-        # Produce action distributions for given observations, and 
+        # Produce action distributions for given observations, and
         # optionally compute the log likelihood of given actions under
         # those distributions.
         pi = self._distribution(obs)
@@ -64,7 +64,7 @@ class Actor(nn.Module):
 
 
 class MLPCategoricalActor(Actor):
-    
+
     def __init__(self, obs_dim, act_dim, hidden_sizes, activation):
         super().__init__()
         self.logits_net = mlp([obs_dim] + list(hidden_sizes) + [act_dim], activation)
@@ -108,7 +108,7 @@ class MLPCritic(nn.Module):
 class MLPActorCritic(nn.Module):
 
 
-    def __init__(self, observation_space, action_space, 
+    def __init__(self, observation_space, action_space,
                  hidden_sizes=(64,64), activation=nn.Tanh):
         super().__init__()
 
@@ -133,3 +133,54 @@ class MLPActorCritic(nn.Module):
 
     def act(self, obs):
         return self.step(obs)[0]
+
+class BROILActorCritic(nn.Module):
+
+
+    def __init__(self, observation_space, action_space, num_rew_fns,
+                 hidden_sizes=(64,64), activation=nn.Tanh):
+        super().__init__()
+
+        obs_dim = observation_space.shape[0]
+
+        # policy builder depends on action space
+        if isinstance(action_space, Box):
+            self.pi = MLPGaussianActor(obs_dim, action_space.shape[0], hidden_sizes, activation)
+        elif isinstance(action_space, Discrete):
+            self.pi = MLPCategoricalActor(obs_dim, action_space.n, hidden_sizes, activation)
+
+        # build value function
+        self.v  = BROILCritic(obs_dim, hidden_sizes, activation, num_rew_fns)
+
+    def step(self, obs):
+        with torch.no_grad():
+            pi = self.pi._distribution(obs)
+            a = pi.sample()
+            logp_a = self.pi._log_prob_from_distribution(pi, a)
+            v = self.v(obs)
+
+            if (type(v) == list):
+                v = torch.from_numpy(np.asarray(v))
+
+        return a.numpy(), v.numpy(), logp_a.numpy()
+
+    def act(self, obs):
+        return self.step(obs)[0]
+
+
+class BROILCritic(nn.Module):
+
+    def __init__(self, obs_dim, hidden_sizes, activation, num_rew_fns):
+        super().__init__()
+        self.v_nets = nn.ModuleList()
+        for i in range(num_rew_fns):
+            self.v_nets.append(mlp([obs_dim] + list(hidden_sizes) + [1], activation))
+
+    def forward(self, obs):
+        vals = []
+        for v_net in self.v_nets:
+            #v = torch.squeeze(v_net(obs), -1)
+            v = v_net(obs)
+            vals.append(v)
+        val_tensor = torch.stack(vals, dim=1).squeeze()
+        return val_tensor

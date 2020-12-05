@@ -13,6 +13,8 @@ import numpy as np
 from gym import Env
 from gym import utils
 from gym.spaces import Box
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 
 from .pointbot_const import *
 
@@ -53,17 +55,18 @@ class PointBot(Env, utils.EzPickle):
     def step(self, a):
         a = process_action(a)
         next_state = self._next_state(self.state, a)
-        cur_cost = self.step_cost(self.state, a)
+        cur_cost = self.step_cost(self.state, a) # distance to the goal
         self.rewards.append(-cur_cost)
         self.state = next_state
         self.time += 1
         self.hist.append(self.state)
-        self.done = HORIZON <= self.time
-        return self.state, -cur_cost, self.done, {}
+        self.done = HORIZON <= self.time                        # where is collision cost uncertain
+        return self.state, -cur_cost, self.done, {}     # add information, boolean, obstacle = true or false whether collision or not, key to be in collsion
+
 
     def reset(self):
         self.state = self.start_state + np.random.randn(4)
-        self.time = 0
+        self.time = 0       #expectiation better to go through obstacle small number (2), worst case better around (50)
         self.rewards = []
         self.done = False
         self.hist = [self.state]
@@ -76,7 +79,8 @@ class PointBot(Env, utils.EzPickle):
         return np.linalg.norm(np.subtract(GOAL_STATE, s)) + self.collision_cost(s)
 
     def collision_cost(self, obs):
-        return COLLISION_COST * self.obstacle(obs)
+        return COLLISION_COST * self.obstacle(obs)    #put this instide the dicitonary, in collision
+
 
     def plot_trajectory(self, states=None):
         if states == None:
@@ -85,6 +89,24 @@ class PointBot(Env, utils.EzPickle):
         plt.scatter(states[:,0], states[:,2])
         plt.show()
 
+    def plot_entire_trajectory(self, states=None):
+        if states == None:
+            states = self.hist
+        states = np.array(states)
+        fig, ax = plt.subplots()
+        colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
+        #add more colors for more than 10 trajs
+        for i in range(len(states)):
+            ax.scatter(states[i][:,0], states[i][:,2], [10]*len(states[i][:,0]), colors[i])
+        num_obst = len(self.obstacle.obs)
+        for i in range(num_obst):
+            xbound = self.obstacle.obs[i].boundsx
+            ybound = self.obstacle.obs[i].boundsy
+            rect = patches.Rectangle((xbound[0],ybound[0]),abs(xbound[1] - xbound[0]),abs(ybound[1] - ybound[0]),linewidth=1, edgecolor='r',facecolor='red', fill = True)
+            ax.add_patch(rect)
+        ax.set_xlim([-75, 25])
+        ax.set_ylim([-50, 50])
+        
     def is_stable(self, s):
         return np.linalg.norm(np.subtract(GOAL_STATE, s)) <= GOAL_THRESH
 

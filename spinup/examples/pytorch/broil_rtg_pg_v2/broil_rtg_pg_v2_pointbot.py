@@ -5,7 +5,10 @@ from torch.distributions.normal import Normal
 from torch.optim import Adam
 import numpy as np
 import gym
+import copy
 from gym.spaces import Discrete, Box
+from spinup.envs.pointbot import *
+import datetime
 
 from spinup.examples.pytorch.broil_rtg_pg_v2.cvar_utils import cvar_enumerate_pg
 from spinup.examples.pytorch.broil_rtg_pg_v2.pointbot_reward_utils import PointBotReward
@@ -28,7 +31,7 @@ def reward_to_go(rews):
     return rtgs
 
 def train(reward_dist, lamda, alpha=0.95, env_name='CartPole-v0', hidden_sizes=[32], lr=1e-2,
-          epochs=50, batch_size=5000, render=False):
+          epochs=50, batch_size=5000, render=False, grid_search=False):
 
     # make environment, check spaces, get obs / act dims
     env = gym.make(env_name)
@@ -97,11 +100,39 @@ def train(reward_dist, lamda, alpha=0.95, env_name='CartPole-v0', hidden_sizes=[
         return broil_weights,cvar
 
 
-
-
-
-
-
+    def n_policy_exe(n):
+        # run n trajectories on the policy
+        obs = env.reset()       # first obs comes from starting distribution
+        done = False            # signal from environment that episode is over
+        ep_rews = []            # list for rewards accrued throughout ep
+        states = []
+        # render first episode of each epoch
+        finished_rendering_this_epoch = False
+        for i in range(n):
+            # get trajectory by acting in the environment with current policy
+            while True:
+                # rendering
+                if (not finished_rendering_this_epoch) and render:
+                    env.render()
+                    #print(obs[0])
+                # act in the environment
+                act = get_action(torch.as_tensor(obs, dtype=torch.float32))
+                obs, rew, done, _ = env.step(act)
+                ## old code from normal policy gradient:
+                ## ep_rews.append(rew)
+                #### New code for BROIL
+                rew_dist = reward_dist.get_reward_distribution(env, obs) #S create reward
+                ep_rews.append(rew_dist)
+                ####
+                if done:
+                    # if episode is over, record info about episode
+                    states.append(copy.deepcopy(env.hist))
+                    obs, done, ep_rews = env.reset(), False, []
+                    # won't render again this epoch
+                    finished_rendering_this_epoch = True
+                    # end loop if env indicates that tracjetory is done
+                    break
+        return states
 
 
 
@@ -163,7 +194,6 @@ def train(reward_dist, lamda, alpha=0.95, env_name='CartPole-v0', hidden_sizes=[
                 # the weight for each logprob(a_t|s_t) is reward-to-go from t
                 #### we are now computing this for every element in the reward function posterior but we can use the same function
                 batch_rewards_to_go.extend(reward_to_go(ep_rews))
-
                 # reset episode-specific variables
                 obs, done, ep_rews = env.reset(), False, []
 
@@ -194,7 +224,7 @@ def train(reward_dist, lamda, alpha=0.95, env_name='CartPole-v0', hidden_sizes=[
     for i in range(epochs):
         batch_loss, batch_rets, batch_lens, cvar = train_one_epoch()
         exp_ret = np.dot(np.mean(batch_rets,axis=0),reward_dist.posterior)
-        worst_case_return = np.min(np.mean(batch_rets))
+        worst_case_return = np.min(np.mean(batch_rets, axis=1))
         cvar_list.append(cvar)
         exp_ret_list.append(exp_ret)
         wc_ret_list.append(worst_case_return)
@@ -202,17 +232,48 @@ def train(reward_dist, lamda, alpha=0.95, env_name='CartPole-v0', hidden_sizes=[
                 (i, batch_loss, exp_ret, cvar, worst_case_return, np.mean(batch_lens)))
 
     import matplotlib.pyplot as plt
-    plt.figure()
-    plt.plot(cvar_list)
-    plt.title("conditional value at risk")
-    plt.figure()
-    plt.plot(exp_ret_list)
-    plt.title("expected return")
-    plt.figure()
-    plt.plot(wc_ret_list)
-    plt.title("worst case return")
 
-    plt.show()
+    if grid_search:
+        date = datetime.date.today()
+        date = str(date).replace('-', '_')
+        experiment_name = env_name + '_alpha_' + str(alpha) + '_lambda_' + str(lamda) + '_grid_' + date
+        metrics = {"conditional value at risk": ('_cvar', cvar_list),
+                   "expected return": ('_expected_return', exp_ret_list),
+                   "worst case return": ('_worst_case_return', wc_ret_list)}
+        for metric, result in metrics.items():
+            file_metric_description, results = result
+
+            if metric == "expected return":
+                # Note: create the visualizations inside folder broil_data/graphs
+                plt.figure()
+                states = n_policy_exe(5)
+                env.plot_entire_trajectory(states = states)
+                plt.title(metric + ' alpha = ' + str(alpha) + ' lambda = ' + str(lamda))
+                plt.savefig('broil_data/graphs/' + experiment_name + file_metric_description + '.png')
+
+            # Note: create data files inside folder broil_data/results
+            with open('broil_data/results/' + experiment_name + file_metric_description + '.txt', 'w') as f:
+                for item in results:
+                    f.write("%s\n" % item)
+
+        print(' Data from experiment: ', experiment_name, ' saved.')
+    else:
+        plt.figure()
+        plt.plot(cvar_list)
+        plt.title("conditional value at risk")
+        plt.figure()
+        plt.plot(exp_ret_list)
+        plt.title("expected return")
+        plt.figure()
+        plt.plot(wc_ret_list)
+        plt.title("worst case return")
+
+        #Create Visualization
+        states = n_policy_exe(5)
+        env.plot_entire_trajectory(states = states)
+
+        plt.show()
+
 
 if __name__ == '__main__':
     import argparse
@@ -222,7 +283,8 @@ if __name__ == '__main__':
     parser.add_argument('--alpha', default=0.8, type=float, help="alpha for alpha CVaR")
     parser.add_argument('--lamda', default = 0.1, type=float, help='blending between exp return (lamda=1) and cvar maximization (lamda=0)')
     parser.add_argument('--lr', type=float, default=1e-2)
-    parser.add_argument('--epochs', type=int, default=100)
+    parser.add_argument('--epochs', type=int, default=50)
+    parser.add_argument('--grid_search', type=bool, default=False)
     args = parser.parse_args()
     print('\nUsing reward-to-go formulation of BROIL policy gradient.\n')
     #print('\nUsing only two reward functions in posterior')
@@ -235,4 +297,17 @@ if __name__ == '__main__':
     #create reward function distribution
     reward_dist = PointBotReward()
 
-    train(reward_dist, args.lamda, args.alpha, env_name=args.env_name, epochs=args.epochs, render=args.render, lr=args.lr)
+    torch.manual_seed(1)
+    np.random.seed(1)
+    reward_dist = PointBotReward()
+    alpha_resolution = .2
+    lamda_resolution = .2
+    alpha_search = [np.round(i * alpha_resolution, 2) for i in range(int(1 / alpha_resolution) + 1)]
+    lamda_search = [np.round(i * lamda_resolution, 2) for i in range(int(1 / lamda_resolution) + 1)]
+    if args.grid_search:
+        for a in alpha_search:
+            for l in lamda_search:
+                print('\nStarting experiment with alpha=', str(a), ' lambda=', str(l), '\n')
+                train(reward_dist, l, a, env_name=args.env_name, epochs=args.epochs, render=args.render, lr=args.lr, grid_search=args.grid_search)
+    else:
+        train(reward_dist, args.lamda, args.alpha, env_name=args.env_name, epochs=args.epochs, render=args.render, lr=args.lr, grid_search=args.grid_search)
