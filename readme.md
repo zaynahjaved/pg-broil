@@ -1,4 +1,18 @@
-**Status:** Maintenance (expect bug fixes and minor updates)
+Running Policy Gradient BROIL:
+==================================
+To run BROIL VPG:
+In the spinningup/spinip/algos/pytorch/vpg directory run
+```bash
+python broil_vpg2.py --env (CartPole-v0, PointBot-v0)
+```
+Pass in BROIL arguments using
+```bash
+--broil_lambda
+--broil_alpha
+```
+(Can also pass in all of the arguments listed in the original spinningup vpg.py code, ie: seed, epochs, env_name, policy_lr, etc)
+
+
 
 Welcome to Spinning Up in Deep RL! 
 ==================================
