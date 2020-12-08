@@ -7,9 +7,10 @@ import spinup.algos.pytorch.vpg.core as core
 from spinup.utils.logx import EpochLogger
 from spinup.utils.mpi_pytorch import setup_pytorch_for_mpi, sync_params, mpi_avg_grads
 from spinup.utils.mpi_tools import mpi_fork, mpi_avg, proc_id, mpi_statistics_scalar, num_procs
-from spinup.examples.pytorch.broil_rtg_pg_v2.cartpole_reward_utils import CartPoleReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.cvar_utils import cvar_enumerate_pg
+from spinup.examples.pytorch.broil_rtg_pg_v2.cartpole_reward_utils import CartPoleReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.pointbot_reward_utils import PointBotReward
+from spinup.examples.pytorch.broil_rtg_pg_v2.shelf_reward_utils import ShelfReward
 
 class VPGBuffer:
     """
@@ -323,8 +324,12 @@ def vpg(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(
             #TODO: check this, but I think reward as function of next state makes most sense
             if args.env == 'CartPole-v0':
                 rew_dist = reward_dist.get_reward_distribution(next_o)
-            else:
+            elif args.env == 'PointBot-v0':
                 rew_dist = reward_dist.get_reward_distribution(env,next_o)
+            elif args.env == 'Shelf-v0':
+                rew_dist = reward_dist.get_reward_distribution(env)
+            else:
+                raise NotImplementedError("Unsupported Environment")
             ep_ret += r
             ep_len += 1
 
@@ -413,8 +418,12 @@ if __name__ == '__main__':
 
     if args.env == 'CartPole-v0':
         reward_dist = CartPoleReward()
-    else:
+    elif args.env == 'PointBot-v0':
         reward_dist = PointBotReward()
+    elif args.env == 'Shelf-v0':
+        reward_dist = ShelfReward()
+    else:
+        raise NotImplementedError("Unsupported Environment")
 
     vpg(lambda : gym.make(args.env), reward_dist=reward_dist, broil_lambda=args.broil_lambda, broil_alpha=args.broil_alpha,
         actor_critic=core.BROILActorCritic, render=args.render,
