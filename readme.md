@@ -22,6 +22,17 @@ First create a folder (broil_dataX) and 3 subfolders (results, visualizations, P
 python3 broil_ppo.py --env PointBot-v0 --grid_search True
 
 
+
+
+Once the above command finishes running, you can plot the cvar and expected value graphs by going into the broil_dataX folder and run:
+
+python3 select_data_to_graph.py
+
+Make sure to create the right folders (line 41) and metric (line 15: 'cvar', 'expected_return') to graph the wanted data.
+
+
+
+
 Default Arguments are defined in lines 507-522
 File saving file directories are defined in lines 466-501
 Alpha, Lambda, pi_lr, and vf_lr parameter arrays are defined in lines 539-546 to run multiple parameters
