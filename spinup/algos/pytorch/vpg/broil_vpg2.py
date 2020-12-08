@@ -408,10 +408,8 @@ if __name__ == '__main__':
 
     mpi_fork(args.cpu)  # run parallel code with mpi
 
-    from run_utils import setup_logger_kwargs
+    from spinup.utils.run_utils import setup_logger_kwargs
     logger_kwargs = setup_logger_kwargs(args.exp_name, args.seed)
-    from gym.envs.registration import register
-    register(id='PointBot-v0',entry_point='pointbot:PointBot')
 
     if args.env == 'CartPole-v0':
         reward_dist = CartPoleReward()
