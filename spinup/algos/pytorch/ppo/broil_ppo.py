@@ -13,7 +13,8 @@ from spinup.utils.mpi_pytorch import setup_pytorch_for_mpi, sync_params, mpi_avg
 from spinup.utils.mpi_tools import mpi_fork, mpi_avg, proc_id, mpi_statistics_scalar, num_procs
 from spinup.examples.pytorch.broil_rtg_pg_v2.pointbot_reward_utils import PointBotReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.cartpole_reward_utils import CartPoleReward
-from spinup.examples.pytorch.broil_rtg_pg_v2.cheetah_reward_utils import CheetahReward
+# from spinup.examples.pytorch.broil_rtg_pg_v2.cheetah_reward_utils import CheetahReward
+from spinup.examples.pytorch.broil_rtg_pg_v2.shelf_reward_utils import ShelfReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.cvar_utils import cvar_enumerate_pg
 
 
@@ -109,7 +110,7 @@ class PPOBuffer:
 def ppo(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(), render=False, seed=0,
         steps_per_epoch=4000, epochs=50, broil_lambda=0.5, broil_alpha=0.95, gamma=0.99, pi_lr=3e-4,
         vf_lr=1e-3, train_pi_iters =40, train_v_iters=80, lam=0.97, max_ep_len=1000, target_kl = .01,
-        clip_ratio = .2, logger_kwargs=dict(), save_freq=10, grid_search=False):
+        clip_ratio = .2, logger_kwargs=dict(), save_freq=10):
     """
     Proximal Policy Optimization (by clipping),
 
@@ -184,13 +185,20 @@ def ppo(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(
 
     # Special function to avoid certain slowdowns from PyTorch + MPI combo.
 
-    def helper_get_reward_distribution(reward_dist, env, obs, action):
-        if type(reward_dist) == type(CartPoleReward()):
-            return reward_dist.get_reward_distribution(obs)
-        elif type(reward_dist) == type(CheetahReward()):
-            return reward_dist.get_reward_distribution(env, obs, action)
+
+    def get_reward_distribution(args, reward_dist, env, next_o, action):
+        if args.env == 'CartPole-v0':
+            rew_dist = reward_dist.get_reward_distribution(next_o)
+        elif args.env == 'PointBot-v0':
+            rew_dist = reward_dist.get_reward_distribution(env, next_o)
+        elif args.env == 'HalfCheetah-v2':
+            rew_dist = reward_dist.get_reward_distribution(env, next_o, action)
+        elif args.env == 'Shelf-v0':
+            rew_dist = reward_dist.get_reward_distribution(env)
         else:
-            return reward_dist.get_reward_distribution(env, obs)
+            raise NotImplementedError("Unsupported Environment")
+
+        return rew_dist
 
     setup_pytorch_for_mpi()
 
@@ -377,12 +385,12 @@ def ppo(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(
 
             next_o, r, d, _ = env.step(a)
             #TODO: check this, but I think reward as function of next state makes most sense
-            rew_dist = helper_get_reward_distribution(reward_dist, env, next_o, a)
+            rew_dist = get_reward_distribution(args, reward_dist, env, next_o, a)
             total_reward_dist += rew_dist.flatten()
             running_ret += r
             ep_ret += r
             ep_len += 1
-            if type(reward_dist) == type(PointBotReward()):
+            if args.env == 'PointBot-v0':
                 obstacles += int(env.obstacle(next_o))
 
 
@@ -422,7 +430,7 @@ def ppo(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(
 
                 num_runs += 1
 
-                if type(reward_dist) == type(PointBotReward()):
+                if args.env == 'PointBot-v0':
                     last_trajectory = np.array(env.hist)
                     if epoch == epochs - 1:
                         trajectories_x.append(last_trajectory[:, 0])
@@ -463,17 +471,17 @@ def ppo(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(
         logger.log_tabular('Time', time.time()-start_time)
         logger.dump_tabular()
 
-    if grid_search:
+    if args.grid_search:
         date = datetime.date.today()
         date = str(date).replace('-', '_')
-        experiment_name = 'PointBotGrid' + '_alpha_' + str(broil_alpha) + '_lambda_' + str(broil_lambda) + '_vflr_'  + str(vf_lr) + '_pilr_' + str(pi_lr) + '_' + date
+        experiment_name = args.env + '_grid' + '_alpha_' + str(broil_alpha) + '_lambda_' + str(lam) + '_vflr_'  + str(vf_lr) + '_pilr_' + str(pi_lr) + '_' + date
         metrics = {"conditional value at risk": ('_cvar', cvar_list),
                    "true_return": ('_true_return', ret_list),
                    "worst case return": ('_worst_case_return', wc_ret_list),
                    "best case return": ('_best_case_return', bc_ret_list),
                    "obstacle_collision": ('_obstacles', obstacle_list)}
 
-        name_of_grid_search = 'broil_data17/'
+        name_of_grid_search = 'broil_data'
         for metric, result in metrics.items():
             file_metric_description, results = result
             file_path = name_of_grid_search + 'results/' + experiment_name + file_metric_description + '.txt'
@@ -481,7 +489,7 @@ def ppo(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(
             with open(file_path, 'w') as f:
                 for item in results:
                     f.write("%s\n" % item)
-        if type(reward_dist) == type(PointBotReward()):
+        if args.env == 'PointBot-v0':
             plt.ylim((-50, 70))
             plt.xlim((-125, 25))
             for i in range(5):
@@ -518,7 +526,7 @@ if __name__ == '__main__':
     parser.add_argument('--value_lr', type=float, default=1e-3)
     parser.add_argument('--broil_lambda', type=float, default=0.0, help="blending between cvar and expret")
     parser.add_argument('--broil_alpha', type=float, default=0.0, help="risk sensitivity for cvar")
-    parser.add_argument('--grid_search', type=bool, default=False, help="search various alpha and lambda parameters broil")
+    parser.add_argument('--grid_search', action="store_true", help="search various alpha and lambda parameters broil")
     args = parser.parse_args()
 
     mpi_fork(args.cpu)  # run parallel code with mpi
@@ -526,15 +534,16 @@ if __name__ == '__main__':
     from spinup.utils.run_utils import setup_logger_kwargs
     logger_kwargs = setup_logger_kwargs(args.exp_name, args.seed)
 
-    if args.env == 'PointBot-v0':
-        reward_dist = PointBotReward()
-    elif args.env == 'CartPole-v0':
+    if args.env == 'CartPole-v0':
         reward_dist = CartPoleReward()
+    elif args.env == 'PointBot-v0':
+        reward_dist = PointBotReward()
     elif args.env == 'HalfCheetah-v2':
         reward_dist = CheetahReward()
+    elif args.env == 'Shelf-v0':
+        reward_dist = ShelfReward()
     else:
-        print('Invalid environment name')
-        sys.exit(0)
+        raise NotImplementedError("Unsupported Environment")
 
     alpha_resolution = .2
     lamda_resolution = .2
@@ -555,7 +564,7 @@ if __name__ == '__main__':
                             actor_critic=core.BROILActorCritic, render=args.render,
                             ac_kwargs=dict(hidden_sizes=[args.hid]*args.l), gamma=args.gamma,
                             seed=args.seed, steps_per_epoch=args.steps, epochs=args.epochs,
-                            pi_lr=p_lr, vf_lr = v_lr, logger_kwargs=logger_kwargs, grid_search = args.grid_search)
+                            pi_lr=p_lr, vf_lr = v_lr, logger_kwargs=logger_kwargs)
     else:
         ppo(lambda : gym.make(args.env), reward_dist=reward_dist, broil_lambda=args.broil_lambda, broil_alpha=args.broil_alpha,
             actor_critic=core.BROILActorCritic, render=args.render,
