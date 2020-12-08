@@ -1,15 +1,19 @@
 import numpy as np
 import torch
 from torch.optim import Adam
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 import gym
 import time
 import datetime
+import os, sys
 import spinup.algos.pytorch.vpg.core as core
 from spinup.utils.logx import EpochLogger
 from spinup.utils.mpi_pytorch import setup_pytorch_for_mpi, sync_params, mpi_avg_grads
 from spinup.utils.mpi_tools import mpi_fork, mpi_avg, proc_id, mpi_statistics_scalar, num_procs
-from spinup.examples.pytorch.broil_rtg_pg_v2.cartpole_reward_utils import CartPoleReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.pointbot_reward_utils import PointBotReward
+from spinup.examples.pytorch.broil_rtg_pg_v2.cartpole_reward_utils import CartPoleReward
+from spinup.examples.pytorch.broil_rtg_pg_v2.cheetah_reward_utils import CheetahReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.cvar_utils import cvar_enumerate_pg
 
 
@@ -97,13 +101,14 @@ class PPOBuffer:
             self.adv_buf[:,i] = (self.adv_buf[:,i] - adv_mean) / adv_std
         data = dict(obs=self.obs_buf, act=self.act_buf, ret=self.ret_buf,
                         adv=self.adv_buf, logp=self.logp_buf, p_returns=self.posterior_returns)
+        self.posterior_returns = []
         return {k: torch.as_tensor(v, dtype=torch.float32) for k,v in data.items()}
 
 
 
 def ppo(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(), render=False, seed=0,
         steps_per_epoch=4000, epochs=50, broil_lambda=0.5, broil_alpha=0.95, gamma=0.99, pi_lr=3e-4,
-        vf_lr=1e-3, train_pi_iters = 80, train_v_iters=80, lam=0.97, max_ep_len=1000, target_kl = .01,
+        vf_lr=1e-3, train_pi_iters =40, train_v_iters=80, lam=0.97, max_ep_len=1000, target_kl = .01,
         clip_ratio = .2, logger_kwargs=dict(), save_freq=10, grid_search=False):
     """
     Proximal Policy Optimization (by clipping),
@@ -179,11 +184,13 @@ def ppo(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(
 
     # Special function to avoid certain slowdowns from PyTorch + MPI combo.
 
-    def helper_get_reward_distribution(reward_dist, env, obs):
-        if type(reward_dist) == type(PointBotReward()):
-            return reward_dist.get_reward_distribution(env, obs)
-        else:
+    def helper_get_reward_distribution(reward_dist, env, obs, action):
+        if type(reward_dist) == type(CartPoleReward()):
             return reward_dist.get_reward_distribution(obs)
+        elif type(reward_dist) == type(CheetahReward()):
+            return reward_dist.get_reward_distribution(env, obs, action)
+        else:
+            return reward_dist.get_reward_distribution(env, obs)
 
     setup_pytorch_for_mpi()
 
@@ -216,6 +223,9 @@ def ppo(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(
     local_steps_per_epoch = int(steps_per_epoch / num_procs())
     buf = PPOBuffer(obs_dim, act_dim, num_rew_fns, local_steps_per_epoch, gamma, lam)
 
+    mean_r = torch.zeros(num_rew_fns)
+    std_r = torch.zeros(num_rew_fns)
+
     #### compute BROIL policy gradient loss (robust version)
     def compute_broil_weights(batch_rets, weights):
         '''batch_returns: list of numpy arrays of size num_rollouts x num_reward_fns
@@ -226,6 +236,7 @@ def ppo(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(
         #need to compute BROIL weights for policy gradient and convert to pytorch
 
         #first find the expected on-policy return for current policy under each reward function in the posterior
+
         exp_batch_rets = np.mean(batch_rets.numpy(), axis=0)
         # print(exp_batch_rets)
         posterior_reward_weights = reward_dist.posterior
@@ -280,7 +291,16 @@ def ppo(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(
     # Set up function for computing value loss
     def compute_loss_v(data):
         obs, ret = data['obs'], data['ret']
+        # TODO: Test normalizing the value targets
+        new_mean_r = torch.mean(ret, dim=0)
+        new_std_r = torch.std(ret, dim=0)
+        ret = (ret - new_mean_r) / new_std_r
         mse = (ac.v(obs) - ret)**2
+
+        mean_r[:] = new_mean_r  # IN PLACE MODIFICATION! Don't change
+        std_r[:] = new_std_r
+        # print(mse.mean(dim=0))
+        # print('')
         return (mse).mean()
 
 
@@ -335,7 +355,11 @@ def ppo(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(
 
     cvar_list = []
     wc_ret_list = []
+    bc_ret_list = []
     ret_list = []
+    obstacle_list = []
+    trajectories_x = []
+    trajectories_y = []
 
     # Main loop: collect experience in env and update/log each epoch
     for epoch in range(epochs):
@@ -344,16 +368,22 @@ def ppo(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(
         total_reward_dist = np.zeros(num_rew_fns)
         running_ret = 0
         num_runs = 0
+        obstacles = 0
         for t in range(local_steps_per_epoch):
             a, v, logp = ac.step(torch.as_tensor(o, dtype=torch.float32))
 
+            # TODO: Test unnormalizing the values
+            v = (v * std_r.numpy()) + mean_r.numpy()
+
             next_o, r, d, _ = env.step(a)
             #TODO: check this, but I think reward as function of next state makes most sense
-            rew_dist = helper_get_reward_distribution(reward_dist, env, next_o)
+            rew_dist = helper_get_reward_distribution(reward_dist, env, next_o, a)
             total_reward_dist += rew_dist.flatten()
             running_ret += r
             ep_ret += r
             ep_len += 1
+            if type(reward_dist) == type(PointBotReward()):
+                obstacles += int(env.obstacle(next_o))
 
 
 
@@ -388,8 +418,16 @@ def ppo(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(
                 if terminal:
                     # only save EpRet / EpLen if trajectory finished
                     logger.store(EpRet=ep_ret, EpLen=ep_len)
+                    # print(ep_ret)
 
                 num_runs += 1
+
+                if type(reward_dist) == type(PointBotReward()):
+                    last_trajectory = np.array(env.hist)
+                    if epoch == epochs - 1:
+                        trajectories_x.append(last_trajectory[:, 0])
+                        trajectories_y.append(last_trajectory[:, 2])
+
                 o, ep_ret, ep_len = env.reset(), 0, 0
 
         # Save model
@@ -402,7 +440,12 @@ def ppo(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(
         # Store stuff for grid search
         ret_list.append(running_ret / float(num_runs))
         wc_ret_list.append(np.min(total_reward_dist) / float(num_runs))
+        bc_ret_list.append(np.max(total_reward_dist / float(num_runs)))
         cvar_list.append(sum(running_cvar))
+        obstacle_list.append(obstacles / float(num_runs))
+        """print('True returns:', ret_list)
+        print('Cvar: ', cvar_list)
+        print('Worst case:', wc_ret_list)"""
 
 
         # Log info about epoch
@@ -423,15 +466,38 @@ def ppo(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(
     if grid_search:
         date = datetime.date.today()
         date = str(date).replace('-', '_')
-        experiment_name = 'PointBotGrid' + '_alpha_' + str(broil_alpha) + '_lambda_' + str(lam) + '_vflr_'  + str(vf_lr) + '_pilr_' + str(pi_lr) + '_' + date
+        experiment_name = 'PointBotGrid' + '_alpha_' + str(broil_alpha) + '_lambda_' + str(broil_lambda) + '_vflr_'  + str(vf_lr) + '_pilr_' + str(pi_lr) + '_' + date
         metrics = {"conditional value at risk": ('_cvar', cvar_list),
                    "true_return": ('_true_return', ret_list),
-                   "worst case return": ('_worst_case_return', wc_ret_list)}
+                   "worst case return": ('_worst_case_return', wc_ret_list),
+                   "best case return": ('_best_case_return', bc_ret_list),
+                   "obstacle_collision": ('_obstacles', obstacle_list)}
+
+        name_of_grid_search = 'broil_data17/'
         for metric, result in metrics.items():
             file_metric_description, results = result
-            with open('broil_data/results/' + experiment_name + file_metric_description + '.txt', 'w') as f:
+            file_path = name_of_grid_search + 'results/' + experiment_name + file_metric_description + '.txt'
+            assert not os.path.isfile(file_path)  # make sure we are making a new file and not overwriting
+            with open(file_path, 'w') as f:
                 for item in results:
                     f.write("%s\n" % item)
+        if type(reward_dist) == type(PointBotReward()):
+            plt.ylim((-50, 70))
+            plt.xlim((-125, 25))
+            for i in range(5):
+                x = trajectories_x[i]
+                y = trajectories_y[i]
+                plt.scatter(x, y)
+
+            x_bounds = [obstacle.boundsx for obstacle in env.obstacle.obs]
+            y_bounds = [obstacle.boundsy for obstacle in env.obstacle.obs]
+            for i in range(len(x_bounds)):
+                plt.gca().add_patch(patches.Rectangle((x_bounds[i][0], y_bounds[i][0]), width=x_bounds[i][1] - x_bounds[i][0], height=y_bounds[i][1] - y_bounds[i][0], fill=True, alpha=.5))
+            plt.savefig(name_of_grid_search + 'visualizations/' + experiment_name + '.png')
+            plt.clf()
+
+            torch.save(ac.state_dict(), name_of_grid_search + 'PointBot_networks/' + experiment_name + '.txt')
+
         print(' Data from experiment: ', experiment_name, ' saved.')
 
 if __name__ == '__main__':
@@ -450,8 +516,8 @@ if __name__ == '__main__':
     parser.add_argument('--render', type=bool, default=False)
     parser.add_argument('--policy_lr', type=float, default=1e-2, help="learning rate for policy")
     parser.add_argument('--value_lr', type=float, default=1e-3)
-    parser.add_argument('--broil_lambda', type=float, default=0.5, help="blending between cvar and expret")
-    parser.add_argument('--broil_alpha', type=float, default=0.95, help="risk sensitivity for cvar")
+    parser.add_argument('--broil_lambda', type=float, default=0.0, help="blending between cvar and expret")
+    parser.add_argument('--broil_alpha', type=float, default=0.0, help="risk sensitivity for cvar")
     parser.add_argument('--grid_search', type=bool, default=False, help="search various alpha and lambda parameters broil")
     args = parser.parse_args()
 
@@ -460,19 +526,30 @@ if __name__ == '__main__':
     from spinup.utils.run_utils import setup_logger_kwargs
     logger_kwargs = setup_logger_kwargs(args.exp_name, args.seed)
 
-    reward_dist = PointBotReward() if args.env == 'PointBot-v0' else CartPoleReward()
+    if args.env == 'PointBot-v0':
+        reward_dist = PointBotReward()
+    elif args.env == 'CartPole-v0':
+        reward_dist = CartPoleReward()
+    elif args.env == 'HalfCheetah-v2':
+        reward_dist = CheetahReward()
+    else:
+        print('Invalid environment name')
+        sys.exit(0)
 
     alpha_resolution = .2
     lamda_resolution = .2
-    policy_search = [1e-5, 1e-3, 1e-2, 1e-1]
-    value_search = [1e-5, 1e-3, 1e-2, 1e-1]
-    alpha_search = [np.round(i * alpha_resolution, 2) for i in range(int(1 / alpha_resolution) + 1)]
-    lamda_search = [np.round(i * lamda_resolution, 2) for i in range(int(1 / lamda_resolution) + 1)]
+    policy_search = [1e-3, 1e-2] #[1e-5, 1e-3, 1e-2, 1e-1]
+    value_search = [1e-3, 1e-2] #[1e-5, 1e-3, 1e-2, 1e-1]
+    #alpha_search = [np.round(i * alpha_resolution, 2) for i in range(int(1 / alpha_resolution))]
+    alpha_search = [0.92, 0.95]
+    #lamda_search = [np.round(i * lamda_resolution, 2) for i in range(int(1 / lamda_resolution) + 1)]
+    lamda_search = [0, 0.04, 0.08, 0.12, 0.16]
+
     if args.grid_search:
-        for a in alpha_search:
-            for l in lamda_search:
-                for p_lr in policy_search:
-                    for v_lr in value_search:
+        for l in lamda_search:
+            for p_lr in policy_search:
+                for v_lr in value_search:
+                    for a in alpha_search:
                         print('\nStarting experiment with alpha=', str(a), ' lambda=', str(l), '\n')
                         ppo(lambda : gym.make(args.env), reward_dist=reward_dist, broil_lambda=l, broil_alpha=a,
                             actor_critic=core.BROILActorCritic, render=args.render,
