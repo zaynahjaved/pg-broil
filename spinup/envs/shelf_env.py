@@ -13,7 +13,7 @@ from gym.spaces import Box
 import os
 
 FIXED_ENV = False
-DENSE_REWARD = False
+DENSE_REWARD = True
 GT_STATE = True
 EARLY_TERMINATION = True
 
@@ -41,7 +41,7 @@ class ShelfEnv(BaseMujocoEnv):
         self.substeps = 500
         self.low_bound = np.array([-0.4, -0.4, -0.05])
         self.high_bound = np.array([0.4, 0.4, 0.15])
-        self.ac_high = np.array([0.02, 0.02, 0.02, 0.1])
+        self.ac_high = np.array([0.1, 0.1, 0.1, 0.1])
         self.ac_low = -self.ac_high
         self.action_space = Box(self.ac_low, self.ac_high)
         self._previous_target_qpos = None
@@ -153,6 +153,35 @@ class ShelfEnv(BaseMujocoEnv):
         self.obj_y_dist_range[0] = bounds[0]
         self.obj_y_dist_range[1] = bounds[1]
 
+    # def expert_action(self, noise_std=0.0, demo_quality='high'):
+    #     cur_pos = self.position[:3]
+    #     cur_pos[1] += 0.05  # compensate for length of jaws
+    #     target_obj_pos = self.object_poses[1][:3]
+    #     action = np.zeros(self._adim)
+    #     delta = target_obj_pos - cur_pos
+    #     # print(self.jaw_width)
+    #     if demo_quality == 'high':
+    #         thresh1 = 0.02
+    #         thresh2 = 0.04
+    #     else:
+    #         thresh1 = 0.03
+    #         thresh2 = 0.05
+
+    #     if np.abs(delta[0]) > thresh1:
+    #         action[0] = delta[0]
+    #         action[3] = 0.02
+    #     elif np.abs(delta[1]) > thresh2:
+    #         action[1] = delta[1]
+    #         action[3] = 0.02
+    #     elif self.jaw_width > 0.06:
+    #         action[3] = 0.06
+    #     else:
+    #         action[3] = 0.06
+    #         action[2] = 0.05
+    #     action = action + np.random.randn(self._adim) * noise_std
+    #     action = np.clip(action, self.ac_low, self.ac_high)
+    #     return action
+
     def expert_action(self, noise_std=0.0, demo_quality='high'):
         cur_pos = self.position[:3]
         cur_pos[1] += 0.05  # compensate for length of jaws
@@ -160,24 +189,26 @@ class ShelfEnv(BaseMujocoEnv):
         action = np.zeros(self._adim)
         delta = target_obj_pos - cur_pos
         # print(self.jaw_width)
-        if demo_quality == 'high':
-            thresh1 = 0.02
-            thresh2 = 0.04
-        else:
-            thresh1 = 0.03
-            thresh2 = 0.05
-
-        if np.abs(delta[0]) > thresh1:
-            action[0] = delta[0]
+        if np.abs(delta[0]) > 0.03:
+            if demo_quality == 'high':
+                action[0] = delta[0]
+            else:
+                action[0] = 0.5 * delta[0]
             action[3] = 0.02
-        elif np.abs(delta[1]) > thresh2:
-            action[1] = delta[1]
+        elif np.abs(delta[1]) > 0.05:
+            if demo_quality == 'high':
+                action[1] = delta[1]
+            else:
+                action[1] = 0.5 * delta[1]
             action[3] = 0.02
         elif self.jaw_width > 0.06:
             action[3] = 0.06
         else:
             action[3] = 0.06
-            action[2] = 0.05
+            if demo_quality == 'high':
+                action[2] = 0.05
+            else:
+                action[2] = 0.02
         action = action + np.random.randn(self._adim) * noise_std
         action = np.clip(action, self.ac_low, self.ac_high)
         return action
@@ -188,8 +219,8 @@ class ShelfEnv(BaseMujocoEnv):
                      self.target_height_thresh).astype(float)
         else:
             lift_reward = (self.target_object_height > self.target_height_thresh).astype(float)
-            # if lift_reward == 1:
-            #     print("lifted")
+            if lift_reward == 1:
+                print("lifted")
             cur_pos = self.position[:2]
             cur_pos[1] += 0.05 # compensate for length of jaws
             target_obj_pos = self.object_poses[1][:2]
@@ -246,6 +277,26 @@ class ShelfEnv(BaseMujocoEnv):
         target = clip_target_qpos(target, self.low_bound, self.high_bound)
         return target
 
+    def get_demos(self, num_demos):
+        demo_obs = []
+        demo_acs = []
+        env = ShelfEnv()
+
+        i = 0
+        while i < num_demos:
+            s = env.reset()
+            demo_obs.append([s])
+            demo_acs.append([])
+            for _ in range(25):
+                ac = env.expert_action(0.02, demo_quality='high')
+                ns, r, done, info = env.step(ac)
+                if r >= 0.5:
+                    i += 1
+                    break
+                demo_obs[-1].append(ns)
+                demo_acs[-1].append(ac)
+
+        return demo_obs, demo_acs
 
 def npy_to_gif(im_list, filename, fps=4):
     clip = mpy.ImageSequenceClip(im_list, fps=fps)
@@ -258,13 +309,15 @@ if __name__ == '__main__':
     for i in range(25):
         # ac = env.expert_action(0.1, demo_quality='low')
         if i < 12:
-            ac = env.expert_action(0.01, demo_quality='low')
+            ac = env.expert_action(0.01, demo_quality='high')
         else:
-            ac = env.expert_action(0.2, demo_quality='low')
+            ac = env.expert_action(0.01, demo_quality='high')
         # ac = env.expert_action(0)
         ns, r, done, info = env.step(ac)
         print(env.topple_check())
         print("reward: ", r)
+        if r >= 0.5:
+            break
         a = env.render().squeeze()
         im_list.append(a)
     # plt.imshow(a.squeeze())
