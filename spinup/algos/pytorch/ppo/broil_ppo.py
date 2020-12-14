@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import gym
 import time
+from tqdm import tqdm
 import datetime
 import os, sys
 import spinup.algos.pytorch.vpg.core as core
@@ -16,6 +17,8 @@ from spinup.examples.pytorch.broil_rtg_pg_v2.cartpole_reward_utils import CartPo
 # from spinup.examples.pytorch.broil_rtg_pg_v2.cheetah_reward_utils import CheetahReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.shelf_reward_utils import ShelfReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.cvar_utils import cvar_enumerate_pg
+
+torchify = lambda x: torch.FloatTensor(x).to(torch.device('cpu'))
 
 
 class PPOBuffer:
@@ -110,7 +113,7 @@ class PPOBuffer:
 def ppo(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(), render=False, seed=0,
         steps_per_epoch=4000, epochs=50, broil_lambda=0.5, broil_alpha=0.95, gamma=0.99, pi_lr=3e-4,
         vf_lr=1e-3, train_pi_iters =40, train_v_iters=80, lam=0.97, max_ep_len=1000, target_kl = .01,
-        clip_ratio = .2, logger_kwargs=dict(), save_freq=10):
+        clip_ratio = .2, logger_kwargs=dict(), save_freq=10, clone=False, num_demos=0, train_pi_BC_iters=100):
     """
     Proximal Policy Optimization (by clipping),
 
@@ -271,7 +274,6 @@ def ppo(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(
     # Set up function for computing PPO policy loss
     def compute_loss_pi(data):
         obs, act, adv, logp_old, batch_returns = data['obs'], data['act'], data['adv'], data['logp'], data['p_returns']
-
         # Use advantage estimates to compute BROIL policy gradient weights
         broil_weights, cvar = compute_broil_weights(batch_returns, adv)
         weights = torch.as_tensor(broil_weights, dtype=torch.float32)
@@ -289,6 +291,17 @@ def ppo(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(
         pi_info = dict(kl=approx_kl, ent=ent, cf=clipfrac)
 
         return loss_pi, pi_info, cvar
+
+    # Maximize log_pi for acs in demos
+    def policy_BC_loss(demo_obs, demo_acs):
+        # Policy loss
+        loss_pi = 0
+        for i in range(len(demo_acs)):
+            obs_batch = torchify(np.array(demo_obs[i][:-1]))
+            acs_batch = torchify(np.array(demo_acs[i]))
+            pi, logp = ac.pi(obs_batch, acs_batch)
+            loss_pi += (-(logp).mean())
+        return loss_pi
 
     # Set up function for computing value loss for a particular reward function value estimator
     # def compute_loss_v(data, reward_index):
@@ -369,15 +382,25 @@ def ppo(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(
     trajectories_x = []
     trajectories_y = []
 
+    # Behavior clone policy on some initial demos
+    if clone and num_demos > 0:
+        demo_obs, demo_acs = env.get_demos(num_demos)
+        for i in range(train_pi_BC_iters):
+            print("BC iter: ", i)
+            pi_optimizer.zero_grad()
+            BC_loss = policy_BC_loss(demo_obs, demo_acs)
+            BC_loss.backward()
+            pi_optimizer.step()
+
     # Main loop: collect experience in env and update/log each epoch
-    for epoch in range(epochs):
+    for epoch in tqdm(range(epochs)):
         first_rollout = True
         running_cvar = []
         total_reward_dist = np.zeros(num_rew_fns)
         running_ret = 0
         num_runs = 0
         obstacles = 0
-        for t in range(local_steps_per_epoch):
+        for t in tqdm(range(local_steps_per_epoch)):
             a, v, logp = ac.step(torch.as_tensor(o, dtype=torch.float32))
 
             # TODO: Test unnormalizing the values
@@ -527,6 +550,8 @@ if __name__ == '__main__':
     parser.add_argument('--broil_lambda', type=float, default=0.0, help="blending between cvar and expret")
     parser.add_argument('--broil_alpha', type=float, default=0.0, help="risk sensitivity for cvar")
     parser.add_argument('--grid_search', action="store_true", help="search various alpha and lambda parameters broil")
+    parser.add_argument('--clone', action="store_true", help="do behavior cloning")
+    parser.add_argument('--num_demos', type=int, default=0)
     args = parser.parse_args()
 
     mpi_fork(args.cpu)  # run parallel code with mpi
@@ -570,4 +595,4 @@ if __name__ == '__main__':
             actor_critic=core.BROILActorCritic, render=args.render,
             ac_kwargs=dict(hidden_sizes=[args.hid]*args.l), gamma=args.gamma,
             seed=args.seed, steps_per_epoch=args.steps, epochs=args.epochs,
-            pi_lr=args.policy_lr, vf_lr = args.value_lr, logger_kwargs=logger_kwargs)
+            pi_lr=args.policy_lr, vf_lr = args.value_lr, logger_kwargs=logger_kwargs, clone=args.clone, num_demos=args.num_demos)
