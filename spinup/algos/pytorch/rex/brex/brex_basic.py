@@ -10,6 +10,7 @@ import torch
 import copy
 import torch.nn as nn
 import torch.nn.functional as F
+from spinup.algos.pytorch.brex.model_evaluator import model_eval
 
 
 
@@ -146,6 +147,15 @@ if __name__=="__main__":
 
     args = parser.parse_args()
 
+    ##NN files within PointBot_Networks to load into B-REX
+    model_files = ['PointBotGrid_alpha_0.92_lambda_0.12_vflr_0.01_pilr_0.01_2020_12_08.txt',
+                'PointBotGrid_alpha_0.95_lambda_0_vflr_0.01_pilr_0.01_2020_12_07.txt',
+                'PointBotGrid_alpha_0.95_lambda_0_vflr_0.01_pilr_0.001_2020_12_07.txt',
+                'PointBotGrid_alpha_0.95_lambda_0.04_vflr_0.01_pilr_0.01_2020_12_07.txt',
+                'PointBotGrid_alpha_0.95_lambda_0.2_vflr_0.001_pilr_0.001_2020_12_08.txt',
+                'PointBotGrid_alpha_0_lambda_1_vflr_0.0001_pilr_0.01_2020_12_12.txt']
+
+
     print("Hand crafted feature expectations")
     #set seeds
     seed = int(args.seed)
@@ -154,7 +164,7 @@ if __name__=="__main__":
 
 
     #TODO: need to manually specify feature count vectors and true weights below
-    
+
     # num_features = 3
 
     # demo_fcnts = np.array([[  0.0, 1.0,   0.1],
@@ -164,11 +174,17 @@ if __name__=="__main__":
     # true_weights = np.array([+1,-1,+1])
 
     num_features = 2 #inside obstacle, outside obstacle
+    """
     demo_fcnts = np.array([[0.0, 12.0],  #0: good trajectory that only goes in a little bit
                             [5.0, 8.0],  #1: bad trajectory that goes in a lot
                             [1.0, 20.0], #2: good traj that goes diretly to goal and avoids bad region
-                            [0.0, 3.0]]) #3: good straight 
+                            [0.0, 3.0]]) #3: good straight
+    """
 
+    demo_fcnts = []
+    for file in model_files:
+        demo_fcnts.append(model_eval(file, file[13:-15]))
+    demo_fcnts = np.array(demo_fcnts).astype(float)
 
     #true pref ranking: 1,2,0,3
     true_weights = np.array([-0.99, -.01])
