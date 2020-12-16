@@ -222,6 +222,7 @@ def ppo(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(
     # Create BROIL actor-critic module
     num_rew_fns = reward_dist.posterior.size
     ac = actor_critic(env.observation_space, env.action_space, num_rew_fns, **ac_kwargs)
+    max_ep_len = env._max_episode_steps
 
     # Sync params across processes
     sync_params(ac)
@@ -236,6 +237,8 @@ def ppo(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(
 
     mean_r = torch.zeros(num_rew_fns)
     std_r = torch.zeros(num_rew_fns)
+    if clone:
+        demo_obs, demo_acs = env.get_demos(num_demos)
 
     #### compute BROIL policy gradient loss (robust version)
     def compute_broil_weights(batch_rets, weights):
@@ -384,9 +387,7 @@ def ppo(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(
 
     # Behavior clone policy on some initial demos
     if clone and num_demos > 0:
-        demo_obs, demo_acs = env.get_demos(num_demos)
         for i in range(train_pi_BC_iters):
-            print("BC iter: ", i)
             pi_optimizer.zero_grad()
             BC_loss = policy_BC_loss(demo_obs, demo_acs)
             BC_loss.backward()
@@ -432,8 +433,6 @@ def ppo(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(
             if render and first_rollout:
                 env.render()
                 time.sleep(0.01)
-
-
 
             if terminal or epoch_ended:
                 first_rollout = False
