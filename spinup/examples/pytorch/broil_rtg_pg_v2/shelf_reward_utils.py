@@ -10,4 +10,5 @@ class ShelfReward():
             return np.array([env.reward_fn()] * self.posterior.shape[0])
         else:
             reward_penalties = self.penalties * env.topple_check()
+            print("TOPPLED: ", env.reward_fn() - reward_penalties)
             return env.reward_fn() - reward_penalties

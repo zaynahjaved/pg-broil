@@ -1,1 +1,1 @@
-python broil_ppo.py --env Shelf-v0 --steps 1000 --clone --num_demos 5 —policy_lr 1e-4 —vf_lr 1e-4
+python broil_ppo.py --env Shelf-v0 --steps 1000 --clone --num_demos 5

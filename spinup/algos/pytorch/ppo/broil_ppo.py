@@ -401,13 +401,19 @@ def ppo(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(
         running_ret = 0
         num_runs = 0
         obstacles = 0
+        num_constraint_violations = 0
+        num_episodes = 0
+        constraint_violated = False
         for t in tqdm(range(local_steps_per_epoch)):
             a, v, logp = ac.step(torch.as_tensor(o, dtype=torch.float32))
 
             # TODO: Test unnormalizing the values
             v = (v * std_r.numpy()) + mean_r.numpy()
 
-            next_o, r, d, _ = env.step(a)
+            next_o, r, d, info = env.step(a)
+            if args.env == 'Shelf-v0': # Check if you ever violate a constraint in this episode
+                if info['constraint']:
+                    constraint_violated = True
             #TODO: check this, but I think reward as function of next state makes most sense
             rew_dist = get_reward_distribution(args, reward_dist, env, next_o, a)
             total_reward_dist += rew_dist.flatten()
@@ -435,6 +441,11 @@ def ppo(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(
                 time.sleep(0.01)
 
             if terminal or epoch_ended:
+                if constraint_violated:
+                    num_constraint_violations += 1
+                num_episodes += 1
+
+                constraint_violated = False
                 first_rollout = False
                 if epoch_ended and not(terminal):
                     print('Warning: trajectory cut off by epoch at %d steps.'%ep_len, flush=True)
@@ -492,6 +503,7 @@ def ppo(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(
         logger.log_tabular('KL', average_only=True)
         logger.log_tabular('Time', time.time()-start_time)
         logger.dump_tabular()
+        print("Frac Constraint Violations: %d/%d" % (num_constraint_violations, num_episodes))
 
     if args.grid_search:
         date = datetime.date.today()

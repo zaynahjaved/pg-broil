@@ -205,7 +205,7 @@ class ShelfEnv(BaseMujocoEnv):
             ee_reward = -np.linalg.norm(delta)
             if ee_reward > -0.03:
                 ee_reward = 0.
-            return grasp_reward + 0.1 * ee_reward
+            return grasp_reward# + 0.1 * ee_reward
 
     def object_reset_poses(self):
         new_poses = np.zeros((3, 7))
@@ -274,9 +274,6 @@ class ShelfEnv(BaseMujocoEnv):
                     i += 1
                     success = True
                     break
-
-            print("DEMO ACS: ", demo_acs)
-            print("SUCCESS: ", success)
 
             if not success:
                 del demo_obs[-1]
