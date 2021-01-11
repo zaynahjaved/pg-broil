@@ -15,8 +15,10 @@ from spinup.utils.mpi_tools import mpi_fork, mpi_avg, proc_id, mpi_statistics_sc
 from spinup.examples.pytorch.broil_rtg_pg_v2.pointbot_reward_utils import PointBotReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.cartpole_reward_utils import CartPoleReward
 # from spinup.examples.pytorch.broil_rtg_pg_v2.cheetah_reward_utils import CheetahReward
+from spinup.examples.pytorch.broil_rtg_pg_v2.reacher_reward_utils import ReacherReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.shelf_reward_utils import ShelfReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.cvar_utils import cvar_enumerate_pg
+import dmc2gym
 
 torchify = lambda x: torch.FloatTensor(x).to(torch.device('cpu'))
 
@@ -197,6 +199,8 @@ def ppo(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(
         elif args.env == 'HalfCheetah-v2':
             rew_dist = reward_dist.get_reward_distribution(env, next_o, action)
         elif args.env == 'Shelf-v0':
+            rew_dist = reward_dist.get_reward_distribution(env)
+        elif args.env == 'reacher':
             rew_dist = reward_dist.get_reward_distribution(env)
         else:
             raise NotImplementedError("Unsupported Environment")
@@ -411,7 +415,7 @@ def ppo(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(
             v = (v * std_r.numpy()) + mean_r.numpy()
 
             next_o, r, d, info = env.step(a)
-            if args.env == 'Shelf-v0': # Check if you ever violate a constraint in this episode
+            if args.env == 'Shelf-v0' or args.env == 'reacher': # Check if you ever violate a constraint in this episode
                 if info['constraint']:
                     constraint_violated = True
             #TODO: check this, but I think reward as function of next state makes most sense
@@ -578,8 +582,15 @@ if __name__ == '__main__':
         reward_dist = CheetahReward()
     elif args.env == 'Shelf-v0':
         reward_dist = ShelfReward()
+    elif args.env == 'reacher':
+        reward_dist = ReacherReward()
     else:
         raise NotImplementedError("Unsupported Environment")
+
+    if args.env != 'reacher':
+        env_fn = lambda : gym.make(args.env)
+    else:
+        env_fn = lambda: dmc2gym.make(domain_name='reacher', task_name='hard', seed=args.seed)
 
     alpha_resolution = .2
     lamda_resolution = .2
@@ -596,13 +607,13 @@ if __name__ == '__main__':
                 for v_lr in value_search:
                     for a in alpha_search:
                         print('\nStarting experiment with alpha=', str(a), ' lambda=', str(l), '\n')
-                        ppo(lambda : gym.make(args.env), reward_dist=reward_dist, broil_lambda=l, broil_alpha=a,
+                        ppo(env_fn, reward_dist=reward_dist, broil_lambda=l, broil_alpha=a,
                             actor_critic=core.BROILActorCritic, render=args.render,
                             ac_kwargs=dict(hidden_sizes=[args.hid]*args.l), gamma=args.gamma,
                             seed=args.seed, steps_per_epoch=args.steps, epochs=args.epochs,
                             pi_lr=p_lr, vf_lr = v_lr, logger_kwargs=logger_kwargs)
     else:
-        ppo(lambda : gym.make(args.env), reward_dist=reward_dist, broil_lambda=args.broil_lambda, broil_alpha=args.broil_alpha,
+        ppo(env_fn, reward_dist=reward_dist, broil_lambda=args.broil_lambda, broil_alpha=args.broil_alpha,
             actor_critic=core.BROILActorCritic, render=args.render,
             ac_kwargs=dict(hidden_sizes=[args.hid]*args.l), gamma=args.gamma,
             seed=args.seed, steps_per_epoch=args.steps, epochs=args.epochs,
