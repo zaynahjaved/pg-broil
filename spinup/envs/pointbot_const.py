@@ -4,11 +4,13 @@ from .obstacle import Obstacle, ComplexObstacle
 Constants associated with the PointBot env.
 """
 
-START_POS = [-50, 0]
+START_POS = [-90, 0]
 END_POS = [0, 0]
 GOAL_THRESH = 1.
 START_STATE = [START_POS[0], 0, START_POS[1], 0]
 GOAL_STATE = [END_POS[0], 0, END_POS[1], 0]
+
+GRID = [-120, 20, -50, 40] #Dimensions of grid for visualizing pointbot [xmin, xmax, ymin, ymax]
 
 MAX_FORCE = 1
 HORIZON = 100
