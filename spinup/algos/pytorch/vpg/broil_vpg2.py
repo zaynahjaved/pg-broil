@@ -101,7 +101,7 @@ class VPGBuffer:
 
 
 
-def vpg(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(), render=False, seed=0, 
+def vpg(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILActorCritic, ac_kwargs=dict(), render=False, seed=0, 
         steps_per_epoch=4000, epochs=50, broil_lambda=0.5, broil_alpha=0.95, gamma=0.99, pi_lr=3e-4,
         vf_lr=1e-3, train_v_iters=80, lam=0.97, max_ep_len=1000,
         logger_kwargs=dict(), save_freq=10):
@@ -222,22 +222,50 @@ def vpg(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(
         posterior_reward_weights = reward_dist.posterior
 
 
-        #calculate sigma and find the conditional value at risk given the current policy
-        sigma, cvar = cvar_enumerate_pg(exp_batch_rets, posterior_reward_weights, broil_alpha)
-        print("sigma = {}, cvar = {}".format(sigma, cvar))
+        #calculate sigma and find either the conditional value at risk or entropic risk measure given the current policy
+        if broil_risk_metric == "cvar":
+            #Calculate policy gradient for conditional value at risk
 
-        #compute BROIL policy gradient weights
-        total_rollout_steps = len(weights)
-        broil_weights = np.zeros(total_rollout_steps, dtype=np.float64)
-        for i, prob_r in enumerate(posterior_reward_weights):
-            if sigma > exp_batch_rets[i]:
-                w_r_i = broil_lambda + (1 - broil_lambda) / (1 - broil_alpha)
-            else:
-                w_r_i = broil_lambda
-            broil_weights += prob_r * w_r_i * np.array(weights)[:,i]
+            sigma, cvar = cvar_enumerate_pg(exp_batch_rets, posterior_reward_weights, broil_alpha)
+            print("sigma = {}, cvar = {}".format(sigma, cvar))
+
+            #compute BROIL policy gradient weights
+            total_rollout_steps = len(weights)
+            broil_weights = np.zeros(total_rollout_steps, dtype=np.float64)
+            for i, prob_r in enumerate(posterior_reward_weights):
+                if sigma > exp_batch_rets[i]:
+                    w_r_i = broil_lambda + (1 - broil_lambda) / (1 - broil_alpha)
+                else:
+                    w_r_i = broil_lambda
+                broil_weights += prob_r * w_r_i * np.array(weights)[:,i]
 
 
-        return broil_weights,cvar
+            return broil_weights,cvar
+
+        elif broil_risk_metric == "erm":
+            #calculate policy gradient for entropic risk measure
+            erm = -1.0 / broil_alpha * np.log(np.dot(posterior_reward_weights, np.exp(-broil_alpha * exp_batch_rets)))
+
+            #compute stable weighted soft-max
+            exponents = -broil_alpha * exp_batch_rets
+            z = exponents - max(exponents)
+            numerators = np.exp(z)
+            denominator = np.dot(numerators, posterior_reward_weights)
+            softmax_probs = numerators / denominator
+
+            #compute BROIL policy gradient weights for ERM
+            total_rollout_steps = len(weights)
+            erm_weights = broil_lambda * np.ones(len(posterior_reward_weights)) + (1-broil_lambda) * softmax_probs
+
+            broil_weights = np.array(weights) * erm_weights
+            broil_weights = np.dot(broil_weights, posterior_reward_weights)
+
+            return broil_weights,erm
+
+
+        else:
+            print("Risk metric not implemented!")
+            raise NotImplementedError
  
 
     # Set up function for computing VPG policy loss
@@ -245,7 +273,7 @@ def vpg(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(
         obs, act, adv, logp_old, batch_returns = data['obs'], data['act'], data['adv'], data['logp'], data['p_returns']
 
         # Use advantage estimates to compute BROIL policy gradient weights
-        broil_weights, cvar = compute_broil_weights(batch_returns, adv)
+        broil_weights, risk = compute_broil_weights(batch_returns, adv)
         weights = torch.as_tensor(broil_weights, dtype=torch.float32)
         # Policy loss
         pi, logp = ac.pi(obs, act)
@@ -256,7 +284,7 @@ def vpg(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(
         ent = pi.entropy().mean().item()
         pi_info = dict(kl=approx_kl, ent=ent)
 
-        return loss_pi, pi_info, cvar
+        return loss_pi, pi_info, risk
 
     # Set up function for computing value loss for a particular reward function value estimator
     # def compute_loss_v(data, reward_index):
@@ -284,13 +312,13 @@ def vpg(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(
         data = buf.get()
 
         # Get loss and info values before update
-        pi_l_old, pi_info_old, cvar = compute_loss_pi(data)
+        pi_l_old, pi_info_old, risk = compute_loss_pi(data)
         pi_l_old = pi_l_old.item()
         v_l_old = compute_loss_v(data).item()
 
         # Train policy with a single step of gradient descent
         pi_optimizer.zero_grad()
-        loss_pi, pi_info, cvar = compute_loss_pi(data)
+        loss_pi, pi_info, risk = compute_loss_pi(data)
         loss_pi.backward()
         mpi_avg_grads(ac.pi)    # average grads across MPI processes
         pi_optimizer.step()
@@ -308,7 +336,7 @@ def vpg(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(
         logger.store(LossPi=pi_l_old, LossV=v_l_old,
                      KL=kl, Entropy=ent,
                      DeltaLossPi=(loss_pi.item() - pi_l_old),
-                     DeltaLossV=(loss_v.item() - v_l_old), CVaR=cvar, ExpectedRet=np.dot(np.mean(data['p_returns'].numpy(), axis=0), reward_dist.posterior))
+                     DeltaLossV=(loss_v.item() - v_l_old), Risk=risk, ExpectedRet=np.dot(np.mean(data['p_returns'].numpy(), axis=0), reward_dist.posterior))
 
     # Prepare for interaction with environment
     start_time = time.time()
@@ -386,7 +414,7 @@ def vpg(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(
         logger.log_tabular('DeltaLossPi', average_only=True)
         logger.log_tabular('DeltaLossV', average_only=True)
         logger.log_tabular('Entropy', average_only=True)
-        logger.log_tabular('CVaR', average_only=True)
+        logger.log_tabular('Risk', average_only=True)
         logger.log_tabular('ExpectedRet', average_only=True)
         logger.log_tabular('KL', average_only=True)
         logger.log_tabular('Time', time.time()-start_time)
@@ -406,9 +434,10 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type=int, default=50)
     parser.add_argument('--exp_name', type=str, default='vpg')
     parser.add_argument('--render', type=bool, default=False)
+    parser.add_argument('--risk_metric', type=str, default='cvar', help='choice of risk metric, options are "cvar" or "erm"' )
     parser.add_argument('--policy_lr', type=float, default=1e-2, help="learning rate for policy")
-    parser.add_argument('--broil_lambda', type=float, default=0.5, help="blending between cvar and expret")
-    parser.add_argument('--broil_alpha', type=float, default=0.95, help="risk sensitivity for cvar")
+    parser.add_argument('--broil_lambda', type=float, default=0.5, help="blending between risk and expected perf")
+    parser.add_argument('--broil_alpha', type=float, default=0.95, help="risk sensitivity for cvar [0,1) or erm (0,inf)")
     args = parser.parse_args()
 
     mpi_fork(args.cpu)  # run parallel code with mpi
@@ -425,7 +454,7 @@ if __name__ == '__main__':
     else:
         raise NotImplementedError("Unsupported Environment")
 
-    vpg(lambda : gym.make(args.env), reward_dist=reward_dist, broil_lambda=args.broil_lambda, broil_alpha=args.broil_alpha,
+    vpg(lambda : gym.make(args.env), reward_dist=reward_dist, broil_risk_metric=args.risk_metric, broil_lambda=args.broil_lambda, broil_alpha=args.broil_alpha,
         actor_critic=core.BROILActorCritic, render=args.render,
         ac_kwargs=dict(hidden_sizes=[args.hid]*args.l), gamma=args.gamma, 
         seed=args.seed, steps_per_epoch=args.steps, epochs=args.epochs,

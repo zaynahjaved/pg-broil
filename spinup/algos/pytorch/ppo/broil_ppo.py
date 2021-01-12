@@ -112,7 +112,7 @@ class PPOBuffer:
 
 
 
-def ppo(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(), render=False, seed=0,
+def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILActorCritic, ac_kwargs=dict(), render=False, seed=0,
         steps_per_epoch=4000, epochs=50, broil_lambda=0.5, broil_alpha=0.95, gamma=0.99, pi_lr=3e-4,
         vf_lr=1e-3, train_pi_iters =40, train_v_iters=80, lam=0.97, max_ep_len=1000, target_kl = .01,
         clip_ratio = .2, logger_kwargs=dict(), save_freq=10, clone=False, num_demos=0, train_pi_BC_iters=100):
@@ -244,7 +244,7 @@ def ppo(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(
     if clone:
         demo_obs, demo_acs = env.get_demos(num_demos)
 
-    #### compute BROIL policy gradient loss (robust version)
+#### compute BROIL policy gradient loss (robust version)
     def compute_broil_weights(batch_rets, weights):
         '''batch_returns: list of numpy arrays of size num_rollouts x num_reward_fns
            weights: list of weights, e.g. advantages, rewards to go, etc by reward function over all rollouts,
@@ -254,29 +254,56 @@ def ppo(env_fn, reward_dist, actor_critic=core.BROILActorCritic, ac_kwargs=dict(
         #need to compute BROIL weights for policy gradient and convert to pytorch
 
         #first find the expected on-policy return for current policy under each reward function in the posterior
-
         exp_batch_rets = np.mean(batch_rets.numpy(), axis=0)
-        # print(exp_batch_rets)
+        print(exp_batch_rets)
         posterior_reward_weights = reward_dist.posterior
 
 
-        #calculate sigma and find the conditional value at risk given the current policy
-        sigma, cvar = cvar_enumerate_pg(exp_batch_rets, posterior_reward_weights, broil_alpha)
-        # print("sigma = {}, cvar = {}".format(sigma, cvar))
+        #calculate sigma and find either the conditional value at risk or entropic risk measure given the current policy
+        if broil_risk_metric == "cvar":
+            #Calculate policy gradient for conditional value at risk
 
-        #compute BROIL policy gradient weights
-        total_rollout_steps = len(weights)
-        broil_weights = np.zeros(total_rollout_steps, dtype=np.float64)
-        for i, prob_r in enumerate(posterior_reward_weights):
-            if sigma > exp_batch_rets[i]:
-                w_r_i = broil_lambda + (1 - broil_lambda) / (1 - broil_alpha)
-            else:
-                w_r_i = broil_lambda
-            broil_weights += prob_r * w_r_i * np.array(weights)[:,i]
+            sigma, cvar = cvar_enumerate_pg(exp_batch_rets, posterior_reward_weights, broil_alpha)
+            print("sigma = {}, cvar = {}".format(sigma, cvar))
+
+            #compute BROIL policy gradient weights
+            total_rollout_steps = len(weights)
+            broil_weights = np.zeros(total_rollout_steps, dtype=np.float64)
+            for i, prob_r in enumerate(posterior_reward_weights):
+                if sigma > exp_batch_rets[i]:
+                    w_r_i = broil_lambda + (1 - broil_lambda) / (1 - broil_alpha)
+                else:
+                    w_r_i = broil_lambda
+                broil_weights += prob_r * w_r_i * np.array(weights)[:,i]
 
 
-        return broil_weights, cvar
+            return broil_weights,cvar
 
+        elif broil_risk_metric == "erm":
+            #calculate policy gradient for entropic risk measure
+            erm = -1.0 / broil_alpha * np.log(np.dot(posterior_reward_weights, np.exp(-broil_alpha * exp_batch_rets)))
+
+            #compute stable weighted soft-max
+            exponents = -broil_alpha * exp_batch_rets
+            z = exponents - max(exponents)
+            numerators = np.exp(z)
+            denominator = np.dot(numerators, posterior_reward_weights)
+            softmax_probs = numerators / denominator
+
+            #compute BROIL policy gradient weights for ERM
+            total_rollout_steps = len(weights)
+            erm_weights = broil_lambda * np.ones(len(posterior_reward_weights)) + (1-broil_lambda) * softmax_probs
+
+            broil_weights = np.array(weights) * erm_weights
+            broil_weights = np.dot(broil_weights, posterior_reward_weights)
+
+            return broil_weights,erm
+
+
+        else:
+            print("Risk metric not implemented!")
+            raise NotImplementedError
+ 
 
     # Set up function for computing PPO policy loss
     def compute_loss_pi(data):
@@ -562,6 +589,7 @@ if __name__ == '__main__':
     parser.add_argument('--render', type=bool, default=False)
     parser.add_argument('--policy_lr', type=float, default=1e-2, help="learning rate for policy")
     parser.add_argument('--value_lr', type=float, default=1e-3)
+    parser.add_argument('--risk_metric', type=str, default='cvar', help='choice of risk metric, options are "cvar" or "erm"' )
     parser.add_argument('--broil_lambda', type=float, default=0.0, help="blending between cvar and expret")
     parser.add_argument('--broil_alpha', type=float, default=0.0, help="risk sensitivity for cvar")
     parser.add_argument('--grid_search', action="store_true", help="search various alpha and lambda parameters broil")
@@ -613,7 +641,7 @@ if __name__ == '__main__':
                             seed=args.seed, steps_per_epoch=args.steps, epochs=args.epochs,
                             pi_lr=p_lr, vf_lr = v_lr, logger_kwargs=logger_kwargs)
     else:
-        ppo(env_fn, reward_dist=reward_dist, broil_lambda=args.broil_lambda, broil_alpha=args.broil_alpha,
+        ppo(env_fn, reward_dist=reward_dist, broil_risk_metric=args.risk_metric, broil_lambda=args.broil_lambda, broil_alpha=args.broil_alpha,
             actor_critic=core.BROILActorCritic, render=args.render,
             ac_kwargs=dict(hidden_sizes=[args.hid]*args.l), gamma=args.gamma,
             seed=args.seed, steps_per_epoch=args.steps, epochs=args.epochs,
