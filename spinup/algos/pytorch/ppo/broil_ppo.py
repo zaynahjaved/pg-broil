@@ -6,7 +6,6 @@ import matplotlib.patches as patches
 import gym
 import time
 from tqdm import tqdm
-import datetime
 import os, sys
 import spinup.algos.pytorch.vpg.core as core
 from spinup.utils.logx import EpochLogger
@@ -226,7 +225,7 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
     # Create BROIL actor-critic module
     num_rew_fns = reward_dist.posterior.size
     ac = actor_critic(env.observation_space, env.action_space, num_rew_fns, **ac_kwargs)
-    max_ep_len = env._max_episode_steps
+    #max_ep_len = env._max_episode_steps
 
     # Sync params across processes
     sync_params(ac)
@@ -303,7 +302,7 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
         else:
             print("Risk metric not implemented!")
             raise NotImplementedError
- 
+
 
     # Set up function for computing PPO policy loss
     def compute_loss_pi(data):
@@ -509,7 +508,7 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
         # Perform PPO update!
         update()
 
-        # Store stuff for grid search
+        # Store stuff for saving data
         ret_list.append(running_ret / float(num_runs))
         wc_ret_list.append(np.min(total_reward_dist) / float(num_runs))
         bc_ret_list.append(np.max(total_reward_dist / float(num_runs)))
@@ -536,42 +535,41 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
         logger.dump_tabular()
         print("Frac Constraint Violations: %d/%d" % (num_constraint_violations, num_episodes))
 
-    if args.grid_search:
-        date = datetime.date.today()
-        date = str(date).replace('-', '_')
-        experiment_name = args.env + '_grid' + '_alpha_' + str(broil_alpha) + '_lambda_' + str(lam) + '_vflr_'  + str(vf_lr) + '_pilr_' + str(pi_lr) + '_' + date
-        metrics = {"conditional value at risk": ('_cvar', cvar_list),
-                   "true_return": ('_true_return', ret_list),
-                   "worst case return": ('_worst_case_return', wc_ret_list),
-                   "best case return": ('_best_case_return', bc_ret_list),
-                   "obstacle_collision": ('_obstacles', obstacle_list)}
 
-        name_of_grid_search = 'broil_data'
-        for metric, result in metrics.items():
-            file_metric_description, results = result
-            file_path = name_of_grid_search + 'results/' + experiment_name + file_metric_description + '.txt'
-            assert not os.path.isfile(file_path)  # make sure we are making a new file and not overwriting
-            with open(file_path, 'w') as f:
-                for item in results:
-                    f.write("%s\n" % item)
-        if args.env == 'PointBot-v0':
-            plt.ylim((-50, 70))
-            plt.xlim((-125, 25))
-            for i in range(5):
-                x = trajectories_x[i]
-                y = trajectories_y[i]
-                plt.scatter(x, y)
+    file_data = 'broil_data/'
+    experiment_name = args.env + '_alpha_' + str(broil_alpha) + '_lambda_' + str(lam)
 
-            x_bounds = [obstacle.boundsx for obstacle in env.obstacle.obs]
-            y_bounds = [obstacle.boundsy for obstacle in env.obstacle.obs]
-            for i in range(len(x_bounds)):
-                plt.gca().add_patch(patches.Rectangle((x_bounds[i][0], y_bounds[i][0]), width=x_bounds[i][1] - x_bounds[i][0], height=y_bounds[i][1] - y_bounds[i][0], fill=True, alpha=.5))
-            plt.savefig(name_of_grid_search + 'visualizations/' + experiment_name + '.png')
-            plt.clf()
+    metrics = {"conditional value at risk": ('_cvar', cvar_list),
+               "true_return": ('_true_return', ret_list),
+               "worst case return": ('_worst_case_return', wc_ret_list),
+               "best case return": ('_best_case_return', bc_ret_list),
+               "obstacle_collision": ('_obstacles', obstacle_list)}
 
-            torch.save(ac.state_dict(), name_of_grid_search + 'PointBot_networks/' + experiment_name + '.txt')
+    for metric, result in metrics.items():
+        file_metric_description, results = result
+        file_path = file_data + 'results/' + experiment_name + file_metric_description + '.txt'
+        assert not os.path.isfile(file_path)  # make sure we are making a new file and not overwriting
+        with open(file_path, 'w') as f:
+            for item in results:
+                f.write("%s\n" % item)
 
-        print(' Data from experiment: ', experiment_name, ' saved.')
+    if args.env == 'PointBot-v0':
+        plt.ylim((-50, 70))
+        plt.xlim((-125, 25))
+        for i in range(5):
+            x = trajectories_x[i]
+            y = trajectories_y[i]
+            plt.scatter(x, y)
+
+        x_bounds = [obstacle.boundsx for obstacle in env.obstacle.obs]
+        y_bounds = [obstacle.boundsy for obstacle in env.obstacle.obs]
+        for i in range(len(x_bounds)):
+            plt.gca().add_patch(patches.Rectangle((x_bounds[i][0], y_bounds[i][0]), width=x_bounds[i][1] - x_bounds[i][0], height=y_bounds[i][1] - y_bounds[i][0], fill=True, alpha=.5))
+        plt.savefig(file_data + 'visualizations/' + experiment_name + '.png')
+        plt.clf()
+        #torch.save(ac.state_dict(), file_data + 'PointBot_networks/' + experiment_name + '.txt')
+
+    print(' Data from experiment: ', experiment_name, ' saved.')
 
 if __name__ == '__main__':
     import argparse
@@ -584,7 +582,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', '-s', type=int, default=0)
     parser.add_argument('--cpu', type=int, default=1)
     parser.add_argument('--steps', type=int, default=4000)
-    parser.add_argument('--epochs', type=int, default=50)
+    parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--exp_name', type=str, default='ppo')
     parser.add_argument('--render', type=bool, default=False)
     parser.add_argument('--policy_lr', type=float, default=1e-2, help="learning rate for policy")
@@ -592,7 +590,6 @@ if __name__ == '__main__':
     parser.add_argument('--risk_metric', type=str, default='cvar', help='choice of risk metric, options are "cvar" or "erm"' )
     parser.add_argument('--broil_lambda', type=float, default=0.0, help="blending between cvar and expret")
     parser.add_argument('--broil_alpha', type=float, default=0.0, help="risk sensitivity for cvar")
-    parser.add_argument('--grid_search', action="store_true", help="search various alpha and lambda parameters broil")
     parser.add_argument('--clone', action="store_true", help="do behavior cloning")
     parser.add_argument('--num_demos', type=int, default=0)
     args = parser.parse_args()
@@ -620,29 +617,8 @@ if __name__ == '__main__':
     else:
         env_fn = lambda: dmc2gym.make(domain_name='reacher', task_name='hard', seed=args.seed)
 
-    alpha_resolution = .2
-    lamda_resolution = .2
-    policy_search = [1e-3, 1e-2] #[1e-5, 1e-3, 1e-2, 1e-1]
-    value_search = [1e-3, 1e-2] #[1e-5, 1e-3, 1e-2, 1e-1]
-    #alpha_search = [np.round(i * alpha_resolution, 2) for i in range(int(1 / alpha_resolution))]
-    alpha_search = [0.92, 0.95]
-    #lamda_search = [np.round(i * lamda_resolution, 2) for i in range(int(1 / lamda_resolution) + 1)]
-    lamda_search = [0, 0.04, 0.08, 0.12, 0.16]
-
-    if args.grid_search:
-        for l in lamda_search:
-            for p_lr in policy_search:
-                for v_lr in value_search:
-                    for a in alpha_search:
-                        print('\nStarting experiment with alpha=', str(a), ' lambda=', str(l), '\n')
-                        ppo(env_fn, reward_dist=reward_dist, broil_lambda=l, broil_alpha=a,
-                            actor_critic=core.BROILActorCritic, render=args.render,
-                            ac_kwargs=dict(hidden_sizes=[args.hid]*args.l), gamma=args.gamma,
-                            seed=args.seed, steps_per_epoch=args.steps, epochs=args.epochs,
-                            pi_lr=p_lr, vf_lr = v_lr, logger_kwargs=logger_kwargs)
-    else:
-        ppo(env_fn, reward_dist=reward_dist, broil_risk_metric=args.risk_metric, broil_lambda=args.broil_lambda, broil_alpha=args.broil_alpha,
-            actor_critic=core.BROILActorCritic, render=args.render,
-            ac_kwargs=dict(hidden_sizes=[args.hid]*args.l), gamma=args.gamma,
-            seed=args.seed, steps_per_epoch=args.steps, epochs=args.epochs,
-            pi_lr=args.policy_lr, vf_lr = args.value_lr, logger_kwargs=logger_kwargs, clone=args.clone, num_demos=args.num_demos)
+    ppo(env_fn, reward_dist=reward_dist, broil_risk_metric=args.risk_metric, broil_lambda=args.broil_lambda, broil_alpha=args.broil_alpha,
+        actor_critic=core.BROILActorCritic, render=args.render,
+        ac_kwargs=dict(hidden_sizes=[args.hid]*args.l), gamma=args.gamma,
+        seed=args.seed, steps_per_epoch=args.steps, epochs=args.epochs,
+        pi_lr=args.policy_lr, vf_lr = args.value_lr, logger_kwargs=logger_kwargs, clone=args.clone, num_demos=args.num_demos)
