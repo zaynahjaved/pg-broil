@@ -18,6 +18,7 @@ class PointBotReward():
     def __init__(self):
         self.posterior = np.array([0.4, 0.3, 0.2, .05, .05])
         self.penalties = np.array([20, 10, 0, -10, -100])
+        # for maze environment: self.penalties = np.array([50, 40, 0, -40, -500])
         # Note: expected value of penalty is .55. So, it actually skews us to go towards obstacles
         # The idea is to train BROIL in such a way that it avoids things in the worst case...meaning it'll learn to avoid obstacles
         # despite this. Normal PPO (w/o BROIL) hopefully can't accomplish this as well.

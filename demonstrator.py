@@ -6,6 +6,7 @@ from torch.optim import Adam
 import numpy as np
 import gym
 import copy
+import os
 from gym.spaces import Discrete, Box
 from spinup.envs.pointbot import *
 import datetime
@@ -20,6 +21,7 @@ from gym import utils
 from gym.spaces import Box
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+import random
 
 from spinup.envs.pointbot_const import *
 
@@ -33,6 +35,9 @@ class LineBuilder:
         self.ys = list(line.get_ydata())
         self.xv = [0]
         self.yv = [0]
+        self.xt = []
+        self.yt = []
+        self.feature = [0, 0, 0] #[red region, white space, garabage collected]
         self.states = []
         self.cid = line.figure.canvas.mpl_connect('button_press_event', self)
         self.info = fig.canvas.mpl_connect('key_press_event', self.press)
@@ -43,6 +48,18 @@ class LineBuilder:
             print("X_v: ", str(self.xv[-1]), " Y_v: ", str(self.yv[-1]))
         if event.key == 'p':
             print("X: ", str(self.xs[-1]), " Y: ", str(self.ys[-1]))
+        if event.key == 't':
+            print("Closest Trash X: ", str(self.xt[-1]), " Y: ", str(self.yt[-1]))
+        if event.key == 'c':
+            if math.sqrt(math.pow(self.xt[-1], 2) + math.pow(self.yt[-1], 2) * 1.0) < TRASH_RADIUS:
+                idx_true = [i for i, val in enumerate(self.remaining_trash) if val]
+                if len(idx_true) > 0:
+                    idx_true = idx_true[0]
+                    self.remaining_trash_locs.remove(self.remaining_trash_locs[idx_true])
+                    self.remaining_trash.remove(True)
+                    self.feature[2] += 1
+            else:
+                print("Too far to collect closest trash")
         if event.key == 'e':
             xmin = self.xs[-1] - MAX_FORCE
             xmax = self.xs[-1] + MAX_FORCE
@@ -146,37 +163,76 @@ class LineBuilder:
 
         self.xs.append(event.xdata)
         self.ys.append(event.ydata)
+
+        
+        point = tuple((state[0], state[2]))
+        obs = False
+        for i in range(len(self.obstacle.obs)):
+            if self.obstacle.obs[i].in_obs(point, 0): #point within obstacle region
+                self.feature[0] += 1
+                obs = True
+        if not obs:
+            self.feature[1] += 1
+
+
         self.xv.append(self.xs[-1] - self.xs[-2])
         self.yv.append(self.ys[-1] - self.ys[-2])
         self.states.append([self.xs[-2], self.xv[-1], self.ys[-2], self.yv[-1]] + NOISE_SCALE * np.random.randn(4))
         self.line.set_data(self.xs, self.ys)
         self.line.figure.canvas.draw()
 
-env = gym.make('PointBot-v0')
-fig = plt.figure()
-ax = fig.add_subplot(111)
-ax.set_title('click to build line segments')
-line, = ax.plot([START_POS[0]], START_POS[1])  # empty line
-linebuilder = LineBuilder(line)
-num_obst = len(env.obstacle.obs)
-for i in range(num_obst):
-    xbound = env.obstacle.obs[i].boundsx
-    ybound = env.obstacle.obs[i].boundsy
-    rect = patches.Rectangle((xbound[0],ybound[0]),abs(xbound[1] - xbound[0]),abs(ybound[1] - ybound[0]),linewidth=1, zorder = 0, edgecolor='#d3d3d3',facecolor='#d3d3d3', fill = True)
-    ax.add_patch(rect)
-ax.scatter([START_POS[0]],[START_POS[1]],  [5], '#00FF00')
-ax.scatter([END_POS[0]],[END_POS[1]],  [5], '#FF0000')
+if __name__ == '__main__':
+    import argparse
+    import time
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--dem_num', type=int, default=1)
+    args = parser.parse_args()
 
-ax.set_xlim([GRID[0], GRID[1]])
-ax.set_ylim([GRID[2], GRID[3]])
-plt.show()
+    env = gym.make('PointBot-v0')
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.set_title('click to build line segments')
+    line, = ax.plot([START_POS[0]], START_POS[1])  # empty line
+    linebuilder = LineBuilder(line)
+    num_obst = len(env.obstacle.obs)
+    for i in range(num_obst):
+        xbound = env.obstacle.obs[i].boundsx
+        ybound = env.obstacle.obs[i].boundsy
+        rect = patches.Rectangle((xbound[0],ybound[0]),abs(xbound[1] - xbound[0]),abs(ybound[1] - ybound[0]),linewidth=1, zorder = 0, edgecolor='#d3d3d3',facecolor='#d3d3d3', fill = True)
+        ax.add_patch(rect)
+    for i in range(NUM_TRASH_LOCS):
+        if i < len(TRASH_LOCS):
+            ax.scatter([TRASH_LOCS[i][0]],[TRASH_LOCS[i][1]],  [8], '#964b00')
+        else:
+            proper = False
+            while(not proper):
+                proper = True
+                x = random.uniform(env.grid[0] + 1, env.grid[1] - 1)
+                y = random.uniform(env.grid[2] + 1, env.grid[3] - 1)
+                point = tuple((x, y))
+                for i in range(num_obst):
+                    if env.obstacle.obs[i].in_obs(point):
+                        proper = False
+            ax.scatter([x],[y], [8], '#964b00')
+
+    ax.scatter([START_POS[0]],[START_POS[1]],  [5], '#00FF00')
+    ax.scatter([END_POS[0]],[END_POS[1]],  [5], '#FF0000')
+
+    ax.set_xlim([env.grid[0], env.grid[1]])
+    ax.set_ylim([env.grid[2], env.grid[3]])
+    plt.show()
 
 
-# add the last state with the math
-linebuilder.states.append([linebuilder.xs[-1], linebuilder.xv[-1], linebuilder.ys[-1], linebuilder.yv[-1]]) # same velocity as the last state because no action necessary
-for _ in range(101-len(linebuilder.states)):
-    linebuilder.states.append([END_POS[0], 0, END_POS[1], 0] + NOISE_SCALE * np.random.randn(4))
-
-f = open("states.txt", "a")
-f.write("\n\n" + str(linebuilder.states))
-
+    # add the last state with the math
+    linebuilder.states.append([linebuilder.xs[-1], linebuilder.xv[-1], linebuilder.ys[-1], linebuilder.yv[-1]]) # same velocity as the last state because no action necessary
+    for _ in range(101-len(linebuilder.states)):
+        linebuilder.states.append([END_POS[0], 0, END_POS[1], 0] + NOISE_SCALE * np.random.randn(4))
+    
+    if not os.path.exists('demonstrations'):
+        os.makedirs('demonstrations')
+    f = open("demonstrations/states_" + str(args.dem_num) + ".txt", "a")
+    f.write("\nFeature:" + str(line.builder))
+    f.write("\n\nStates:" + str(linebuilder.states))
+    f.close()
+    plt.savefig('demonstrations/visualization' + str(args.dem_num) + '.png')
+    plt.clf()
