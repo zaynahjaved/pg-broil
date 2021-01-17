@@ -205,7 +205,7 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
             rew_dist = reward_dist.get_reward_distribution(env)
         elif args.env == 'manipulator':
             rew_dist = reward_dist.get_reward_distribution(env)
-        elif args.env == 'Safexp-PointGoal1-v0':
+        elif 'Safexp' in args.env:
             rew_dist = reward_dist.get_reward_distribution(env)
         else:
             raise NotImplementedError("Unsupported Environment")
@@ -617,7 +617,7 @@ if __name__ == '__main__':
         reward_dist = ReacherReward()
     elif args.env == 'manipulator':
         reward_dist = ManipulatorReward()
-    elif args.env == 'Safexp-PointGoal1-v0':
+    elif 'Safexp' in args.env:
         reward_dist = SafetyGymReward()
     else:
         raise NotImplementedError("Unsupported Environment")
