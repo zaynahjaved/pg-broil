@@ -16,6 +16,7 @@ from spinup.examples.pytorch.broil_rtg_pg_v2.cartpole_reward_utils import CartPo
 # from spinup.examples.pytorch.broil_rtg_pg_v2.cheetah_reward_utils import CheetahReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.reacher_reward_utils import ReacherReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.manipulator_reward_utils import ManipulatorReward
+from spinup.examples.pytorch.broil_rtg_pg_v2.safety_gym_reward_utils import SafetyGymReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.shelf_reward_utils import ShelfReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.cvar_utils import cvar_enumerate_pg
 import dmc2gym
@@ -203,6 +204,8 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
         elif args.env == 'reacher':
             rew_dist = reward_dist.get_reward_distribution(env)
         elif args.env == 'manipulator':
+            rew_dist = reward_dist.get_reward_distribution(env)
+        elif args.env == 'Safexp-PointGoal1-v0':
             rew_dist = reward_dist.get_reward_distribution(env)
         else:
             raise NotImplementedError("Unsupported Environment")
@@ -614,8 +617,13 @@ if __name__ == '__main__':
         reward_dist = ReacherReward()
     elif args.env == 'manipulator':
         reward_dist = ManipulatorReward()
+    elif args.env == 'Safexp-PointGoal1-v0':
+        reward_dist = SafetyGymReward()
     else:
         raise NotImplementedError("Unsupported Environment")
+
+    if 'Safexp' in args.env:
+        import safety_gym
 
     if args.env == 'reacher':
         env_fn = lambda: dmc2gym.make(domain_name='reacher', task_name='hard', seed=args.seed)
