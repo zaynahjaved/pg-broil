@@ -104,7 +104,7 @@ class PointBot(Env, utils.EzPickle):
         self.time += 1
         self.hist.append(self.state)
         self.done = HORIZON <= self.time                        # where is collision cost uncertain
-        return self.state, -cur_cost, self.done, {}     # add information, boolean, obstacle = true or false whether collision or not, key to be in collsion
+        return self.state, -cur_cost+trash_bonus, self.done, {}     # add information, boolean, obstacle = true or false whether collision or not, key to be in collsion
 
     def determine_trash_bonus(self, state):
         if TRASH and math.sqrt(math.pow(state[4], 2) + math.pow(state[5], 2) * 1.0) < TRASH_RADIUS:
