@@ -29,7 +29,7 @@ from spinup.examples.pytorch.broil_rtg_pg_v2.cvar_utils import cvar_enumerate_pg
 from spinup.examples.pytorch.broil_rtg_pg_v2.pointbot_reward_utils import PointBotReward
 
 class LineBuilder:
-    def __init__(self, line):
+    def __init__(self, line, env):
         self.line = line
         self.xs = list(line.get_xdata())
         self.ys = list(line.get_ydata())
@@ -37,8 +37,10 @@ class LineBuilder:
         self.yv = [0]
         self.xt = []
         self.yt = []
-        self.feature = [0, 0, 0] #[red region, white space, garabage collected]
+        #self.feature = [0, 0, 0] #[red region, white space, garabage collected]
+        self.feature = [0, 0] #[red region, white space]
         self.states = []
+        self.env = env
         self.cid = line.figure.canvas.mpl_connect('button_press_event', self)
         self.info = fig.canvas.mpl_connect('key_press_event', self.press)
 
@@ -66,6 +68,7 @@ class LineBuilder:
             ymin = self.ys[-1] - MAX_FORCE
             ymax = self.ys[-1] + MAX_FORCE
             if xmin <= END_POS[0] <= xmax and ymin <= END_POS[1] <= ymax and -MAX_FORCE <= self.xv[-1] <= MAX_FORCE and -MAX_FORCE <= self.yv[-1] <= MAX_FORCE:
+                plt.savefig('demonstrations/visualization' + str(args.dem_num) + '.png')
                 plt.close()
             else:
                 print("\nNot proper ending! X distance from END: " + str(self.xs[-1] - END_POS[0]) + " Y distance from END: " + str(self.ys[-1] - END_POS[1]))
@@ -165,10 +168,11 @@ class LineBuilder:
         self.ys.append(event.ydata)
 
         
-        point = tuple((state[0], state[2]))
+        point = tuple((self.xs[-1], self.ys[-1]))
         obs = False
-        for i in range(len(self.obstacle.obs)):
-            if self.obstacle.obs[i].in_obs(point, 0): #point within obstacle region
+
+        for i in range(len(self.env.obstacle.obs)):
+            if self.env.obstacle.obs[i].in_obs(point, 0): #point within obstacle region
                 self.feature[0] += 1
                 obs = True
         if not obs:
@@ -193,7 +197,7 @@ if __name__ == '__main__':
     ax = fig.add_subplot(111)
     ax.set_title('click to build line segments')
     line, = ax.plot([START_POS[0]], START_POS[1])  # empty line
-    linebuilder = LineBuilder(line)
+    linebuilder = LineBuilder(line, env)
     num_obst = len(env.obstacle.obs)
     for i in range(num_obst):
         xbound = env.obstacle.obs[i].boundsx
@@ -230,9 +234,16 @@ if __name__ == '__main__':
     
     if not os.path.exists('demonstrations'):
         os.makedirs('demonstrations')
-    f = open("demonstrations/states_" + str(args.dem_num) + ".txt", "a")
-    f.write("\nFeature:" + str(line.builder))
-    f.write("\n\nStates:" + str(linebuilder.states))
-    f.close()
-    plt.savefig('demonstrations/visualization' + str(args.dem_num) + '.png')
-    plt.clf()
+    
+    try:
+        f = open("demonstrations/states_" + str(args.dem_num) + ".txt", "a")
+        assert linebuilder.feature[0] + linebuilder.feature[1] < HORIZON + 1, "ERROR: Number of states is greater than the HORIZON!"
+        print(linebuilder.feature)
+        linebuilder.feature[1] = HORIZON + 1 - linebuilder.feature[0]
+        print(linebuilder.feature)
+        f.write("\nFeature:" + str(linebuilder.feature))
+        f.write("\n\nStates:" + str(linebuilder.states))
+        f.close()
+        plt.clf()
+    except AssertionError as msg:  
+        print(msg) 
