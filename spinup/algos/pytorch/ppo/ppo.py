@@ -302,7 +302,7 @@ def ppo(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
             next_o, r, d, _ = env.step(a)
             ep_ret += r
             ep_len += 1
-
+            
             # save and log
             buf.store(o, a, r, v, logp)
             logger.store(VVals=v)
@@ -326,7 +326,6 @@ def ppo(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
                 if terminal:
                     # only save EpRet / EpLen if trajectory finished
                     logger.store(EpRet=ep_ret, EpLen=ep_len)
-                o, ep_ret, ep_len = env.reset(), 0, 0
 
 
         # Save model
