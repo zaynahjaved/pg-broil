@@ -49,7 +49,7 @@ class PointBot(Env, utils.EzPickle):
         self.observation_space = Box(-np.ones(4) * np.float('inf'), np.ones(4) * np.float('inf'))
         self.start_state = START_STATE
         self.mode = MODE
-        self.feature = [0, 0, 0] #[red region, white space, garabage collected]
+        self.feature = [0, 1] #[red region, white space, garabage collected]
         self.bonus = TRASH_BONUS
         self.obstacle = OBSTACLE[MODE]
         self.grid = [math.inf, -math.inf, math.inf, -math.inf]
@@ -79,6 +79,7 @@ class PointBot(Env, utils.EzPickle):
             self.remaining_trash_locs = self.trash_locs[:]
             self.remaining_trash = [False] * len(self.trash_locs)
             self.start_state = START_STATE + self.closest_trash(START_STATE)
+            self.feature = [0, 1, 0]
     
     def closest_trash(self, state):
         closest_dist = math.inf
@@ -128,7 +129,7 @@ class PointBot(Env, utils.EzPickle):
 
     def reset(self):
         if TRASH:
-            self.state = self.start_state + np.random.randn(6)
+            self.state = self.start_state + np.random.randn(6) #don't add noise to trash heading
         else:
             self.state = self.start_state + np.random.randn(4)
         self.time = 0       #expectiation better to go through obstacle small number (2), worst case better around (50)

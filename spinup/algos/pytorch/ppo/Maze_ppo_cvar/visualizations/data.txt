@@ -3,18 +3,15 @@ from .obstacle import Obstacle, ComplexObstacle
 """
 Constants associated with the PointBot env.
 """
+
+#MODE 5 START_POS = [-220, 20]
 START_POS = [-170, -130]
 END_POS = [0, 0]
 GOAL_THRESH = 1.
 START_STATE = [START_POS[0], 0, START_POS[1], 0]
 GOAL_STATE = [END_POS[0], 0, END_POS[1], 0]
 
-TRASH = True
-TRASH_BONUS = 0
-TRASH_RADIUS = 0
-NUM_TRASH_LOCS = 1
-TRASH_LOCS = [(-130, -50)]
-TRASH_BUFFER = 10
+GRID = [-320, 320, -350, 240] # Dimensions of grid for visualizing pointbot [xmin, xmax, ymin, ymax] for the demonstrating tool
 
 MAX_FORCE = 1
 HORIZON = 100
@@ -34,3 +31,10 @@ OBSTACLE = {
 	6: ComplexObstacle([[[-150, -25], [-20, 70]], [[-150, -25], [100, 190]]]),
 	7: ComplexObstacle([[[-155, -110], [-190, -80]], [[-200, -155], [-190, -140]], [[-70, -25], [-130, 50]], [[-155, -110], [10, 90]], [[-200, 20], [90, 140]], [[-250, -200], [-190, 140]]]) 
 }
+
+self.posterior = np.array([0.4, 0.3, 0.2, .05, .05])
+        self.penalties = np.array([50, 40, 0, -40, -500])
+= 20 + 12 - 2 - 25 = 5
+
+plt.ylim((-220, 160))
+            plt.xlim((-260, 60))

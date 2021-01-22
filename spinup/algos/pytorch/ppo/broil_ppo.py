@@ -255,7 +255,6 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
 
         #first find the expected on-policy return for current policy under each reward function in the posterior
         exp_batch_rets = np.mean(batch_rets.numpy(), axis=0)
-        print(exp_batch_rets)
         posterior_reward_weights = reward_dist.posterior
 
 
@@ -593,7 +592,7 @@ if __name__ == '__main__':
     parser.add_argument('--policy_lr', type=float, default=3e-4, help="learning rate for policy")
     parser.add_argument('--value_lr', type=float, default=1e-3)
     parser.add_argument('--risk_metric', type=str, default='cvar', help='choice of risk metric, options are "cvar" or "erm"' )
-    parser.add_argument('--broil_lambda', type=float, default=0.9, help="blending between cvar and expret")
+    parser.add_argument('--broil_lambda', type=float, default=0.1, help="blending between cvar and expret")
     parser.add_argument('--broil_alpha', type=float, default=0.95, help="risk sensitivity for cvar")
     parser.add_argument('--clone', action="store_true", help="do behavior cloning")
     parser.add_argument('--num_demos', type=int, default=0)

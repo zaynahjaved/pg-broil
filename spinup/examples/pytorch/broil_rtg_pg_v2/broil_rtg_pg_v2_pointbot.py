@@ -117,6 +117,7 @@ def train(reward_dist, lamda, alpha=0.95, env_name='CartPole-v0', hidden_sizes=[
                     #print(obs[0])
                 # act in the environment
                 act = get_action(torch.as_tensor(obs, dtype=torch.float32))
+                print(act)
                 obs, rew, done, _ = env.step(act)
                 ## old code from normal policy gradient:
                 ## ep_rews.append(rew)
@@ -269,7 +270,7 @@ def train(reward_dist, lamda, alpha=0.95, env_name='CartPole-v0', hidden_sizes=[
         plt.title("worst case return")
 
         #Create Visualization
-        states = n_policy_exe(5)
+        states = n_policy_exe(1)
         env.plot_entire_trajectory(states = states)
 
         plt.show()
