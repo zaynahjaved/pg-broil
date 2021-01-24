@@ -66,7 +66,7 @@ def mcmc_map_search(pairwise_prefs, demo_cnts, num_steps, step_stdev, confidence
 
     last_layer = np.random.randn(len(demo_cnts[0]))
 
-    #normalize the weight vector to have unit 2-norm
+    #normalize the weight vector to have unit 3-norm
     if normalize:
         last_layer = last_layer / np.linalg.norm(last_layer)
     #last_layer = euclidean_proj_l1ball(last_layer)
@@ -148,12 +148,27 @@ if __name__=="__main__":
     args = parser.parse_args()
 
     ##NN files within PointBot_Networks to load into B-REX
+    """
     model_files = ['PointBotGrid_alpha_0.92_lambda_0.12_vflr_0.01_pilr_0.01_2020_12_08.txt',
                 'PointBotGrid_alpha_0.95_lambda_0_vflr_0.01_pilr_0.01_2020_12_07.txt',
                 'PointBotGrid_alpha_0.95_lambda_0_vflr_0.01_pilr_0.001_2020_12_07.txt',
                 'PointBotGrid_alpha_0.95_lambda_0.04_vflr_0.01_pilr_0.01_2020_12_07.txt',
                 'PointBotGrid_alpha_0.95_lambda_0.2_vflr_0.001_pilr_0.001_2020_12_08.txt',
                 'PointBotGrid_alpha_0_lambda_1_vflr_0.0001_pilr_0.01_2020_12_12.txt']
+    """
+    pickle_files = []
+
+    demo_fcnts = []
+    pairwise_prefs = []
+    counter = 0
+    for file in pickle_files:
+        with open('file', 'rb') as handle:
+            b = pickle.load(handle)
+            demo_fcnts += [b["Good"]]
+            demo_fcnts += [b["Bad"]]
+            pairwise_prefs += [(counter, counter+1)]
+            counter += 2
+
 
 
     print("Hand crafted feature expectations")
@@ -173,7 +188,7 @@ if __name__=="__main__":
 
     # true_weights = np.array([+1,-1,+1])
 
-    num_features = 2 #inside obstacle, outside obstacle
+    num_features = 3 #inside obstacle, outside obstacle, number of trash
     """
     demo_fcnts = np.array([[0.0, 12.0],  #0: good trajectory that only goes in a little bit
                             [5.0, 8.0],  #1: bad trajectory that goes in a lot
@@ -181,16 +196,16 @@ if __name__=="__main__":
                             [0.0, 3.0]]) #3: good straight
     """
 
-    demo_fcnts = []
-    for file in model_files:
-        demo_fcnts.append(model_eval(file, file[13:-15]))
-    demo_fcnts = np.array(demo_fcnts).astype(float)
+    #demo_fcnts = []
+    #for file in model_files:
+    #    demo_fcnts.append(model_eval(file, file[13:-15]))
+    #demo_fcnts = np.array(demo_fcnts).astype(float)
 
     #true pref ranking: 1,2,0,3
-    true_weights = np.array([-0.99, -.01])
+    #true_weights = np.array([-0.99, -.01]) #Currently only has 2 features
 
-    traj_returns = np.dot(demo_fcnts, true_weights)
-    print("returns", traj_returns)
+    #traj_returns = np.dot(demo_fcnts, true_weights)
+    #print("returns", traj_returns)
 
     #pairwise_prefs =  [(1,0), (1,2), (2,0), (0,3), (2,3)]
 
@@ -199,6 +214,7 @@ if __name__=="__main__":
 
     #just need index tuples (i,j) denoting j is preferred to i. Assuming all pairwise prefs for now
     #check if really better, there might be ties!
+    """
     pairwise_prefs = []
     for i in range(len(traj_returns)):
         for j in range(i+1, len(traj_returns)):
@@ -212,6 +228,7 @@ if __name__=="__main__":
                 pairwise_prefs.append((j,i))
     print("pairwise prefs (i,j) where i < j")
     print(pairwise_prefs)
+    """
 
     #Run mcmc
     best_reward_lastlayer,chain,log_liks = mcmc_map_search(pairwise_prefs, demo_fcnts, args.num_mcmc_steps, args.mcmc_step_size, args.confidence, args.normalize)
