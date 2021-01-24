@@ -10,7 +10,8 @@ import torch
 import copy
 import torch.nn as nn
 import torch.nn.functional as F
-from spinup.algos.pytorch.brex.model_evaluator import model_eval
+import pickle
+#from spinup.algos.pytorch.brex.model_evaluator import model_eval
 
 
 
@@ -156,13 +157,14 @@ if __name__=="__main__":
                 'PointBotGrid_alpha_0.95_lambda_0.2_vflr_0.001_pilr_0.001_2020_12_08.txt',
                 'PointBotGrid_alpha_0_lambda_1_vflr_0.0001_pilr_0.01_2020_12_12.txt']
     """
-    pickle_files = []
+    pickle_files = ['features_1.pkl', 'features_2.pkl', 'features_3.pkl', 'features_4.pkl', 'features_5.pkl', 
+                    'features_6.pkl', 'features_7.pkl', 'features_8.pkl', 'features_9.pkl', 'features_10.pkl']
 
     demo_fcnts = []
     pairwise_prefs = []
     counter = 0
     for file in pickle_files:
-        with open('file', 'rb') as handle:
+        with open(file, 'rb') as handle:
             b = pickle.load(handle)
             demo_fcnts += [b["Good"]]
             demo_fcnts += [b["Bad"]]
@@ -199,7 +201,7 @@ if __name__=="__main__":
     #demo_fcnts = []
     #for file in model_files:
     #    demo_fcnts.append(model_eval(file, file[13:-15]))
-    #demo_fcnts = np.array(demo_fcnts).astype(float)
+    demo_fcnts = np.array(demo_fcnts).astype(float)
 
     #true pref ranking: 1,2,0,3
     #true_weights = np.array([-0.99, -.01]) #Currently only has 2 features
@@ -237,8 +239,8 @@ if __name__=="__main__":
     print("predictions over ranked demos vs. ground truth returns")
     pred_returns = np.dot(demo_fcnts, best_reward_lastlayer)
     #print(pred_returns)
-    for i, p in enumerate(pred_returns):
-        print(i,p,traj_returns[i])
+    #for i, p in enumerate(pred_returns):
+     #   print(i,p,traj_returns[i])
 
     print("average reward weights")
     print(np.mean(chain, axis=0))
