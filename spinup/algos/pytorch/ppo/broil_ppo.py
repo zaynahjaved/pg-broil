@@ -15,7 +15,13 @@ from spinup.examples.pytorch.broil_rtg_pg_v2.pointbot_reward_utils import PointB
 from spinup.examples.pytorch.broil_rtg_pg_v2.cartpole_reward_utils import CartPoleReward
 # from spinup.examples.pytorch.broil_rtg_pg_v2.cheetah_reward_utils import CheetahReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.reacher_reward_utils import ReacherReward
+<<<<<<< HEAD
 #from spinup.examples.pytorch.broil_rtg_pg_v2.shelf_reward_utils import ShelfReward
+=======
+from spinup.examples.pytorch.broil_rtg_pg_v2.manipulator_reward_utils import ManipulatorReward
+from spinup.examples.pytorch.broil_rtg_pg_v2.safety_gym_reward_utils import SafetyGymReward
+from spinup.examples.pytorch.broil_rtg_pg_v2.shelf_reward_utils import ShelfReward
+>>>>>>> aace91845a3589bd7ab3320be7809891b16bdfdd
 from spinup.examples.pytorch.broil_rtg_pg_v2.cvar_utils import cvar_enumerate_pg
 import dmc2gym
 
@@ -200,6 +206,10 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
         elif args.env == 'Shelf-v0':
             rew_dist = reward_dist.get_reward_distribution(env)
         elif args.env == 'reacher':
+            rew_dist = reward_dist.get_reward_distribution(env)
+        elif args.env == 'manipulator':
+            rew_dist = reward_dist.get_reward_distribution(env)
+        elif 'Safexp' in args.env:
             rew_dist = reward_dist.get_reward_distribution(env)
         else:
             raise NotImplementedError("Unsupported Environment")
@@ -609,13 +619,22 @@ if __name__ == '__main__':
         reward_dist = ShelfReward()
     elif args.env == 'reacher':
         reward_dist = ReacherReward()
+    elif args.env == 'manipulator':
+        reward_dist = ManipulatorReward()
+    elif 'Safexp' in args.env:
+        reward_dist = SafetyGymReward()
     else:
         raise NotImplementedError("Unsupported Environment")
 
-    if args.env != 'reacher':
-        env_fn = lambda : gym.make(args.env)
-    else:
+    if 'Safexp' in args.env:
+        import safety_gym
+
+    if args.env == 'reacher':
         env_fn = lambda: dmc2gym.make(domain_name='reacher', task_name='hard', seed=args.seed)
+    elif args.env == 'manipulator':
+        env_fn = lambda: dmc2gym.make(domain_name='manipulator', task_name='bring_ball', seed=args.seed)
+    else:
+        env_fn = lambda : gym.make(args.env)
 
     ppo(env_fn, reward_dist=reward_dist, broil_risk_metric=args.risk_metric, broil_lambda=args.broil_lambda, broil_alpha=args.broil_alpha,
         actor_critic=core.BROILActorCritic, render=args.render,

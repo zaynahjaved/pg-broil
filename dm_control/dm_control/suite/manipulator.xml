@@ -165,6 +165,12 @@
       <site  name="target_ball" type="sphere"/>
     </body>
 
+    <!-- obstacle -->
+    <body name="obstacle_ball" pos=".4 .001 .4" childclass="ghost">
+      <geom  name="obstacle_ball" type="sphere" size=".07" />
+      <site  name="obstacle_ball" type="sphere"/>
+    </body>
+
     <body name="target_peg" pos="-.2 .001 .4" childclass="ghost">
       <geom name="target_blade" type="capsule" size=".005" fromto="0 0 -.013 0 0 -.113"/>
       <geom name="target_guard" type="capsule" size=".005" fromto="-.017 0 -.043 .017 0 -.043"/>

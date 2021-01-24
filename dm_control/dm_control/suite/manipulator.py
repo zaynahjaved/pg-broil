@@ -36,7 +36,7 @@ _P_IN_TARGET = .1  # Probabillity of object-in-target initial state
 _ARM_JOINTS = ['arm_root', 'arm_shoulder', 'arm_elbow', 'arm_wrist',
                'finger', 'fingertip', 'thumb', 'thumbtip']
 _ALL_PROPS = frozenset(['ball', 'target_ball', 'cup',
-                        'peg', 'target_peg', 'slot'])
+                        'peg', 'target_peg', 'slot', 'obstacle_ball'])
 
 SUITE = containers.TaggedTasks()
 
@@ -56,6 +56,7 @@ def make_model(use_peg, insert):
     required_props = ['ball', 'target_ball']
     if insert:
       required_props += ['cup']
+    required_props += ['obstacle_ball']
 
   # Remove unused props
   for unused_prop in _ALL_PROPS.difference(required_props):
@@ -174,6 +175,7 @@ class Bring(base.Task):
     """
     self._use_peg = use_peg
     self._target = 'target_peg' if use_peg else 'target_ball'
+    self._obstacle = 'obstacle_ball'
     self._object = 'peg' if self._use_peg else 'ball'
     self._object_joints = ['_'.join([self._object, dim]) for dim in 'xzy']
     self._receptacle = 'slot' if self._use_peg else 'cup'
@@ -219,6 +221,15 @@ class Bring(base.Task):
       model.body_quat[self._target, ['qw', 'qy']] = [
           np.cos(target_angle/2), np.sin(target_angle/2)]
 
+      # Randomize obstacle location
+      obstacle_x = uniform(-.4, .4)
+      obstacle_z = uniform(.1, .4)
+      obstacle_angle = uniform(-np.pi, np.pi)
+
+      model.body_pos[self._obstacle, ['x', 'z']] = obstacle_x, obstacle_z
+      model.body_quat[self._obstacle, ['qw', 'qy']] = [
+          np.cos(obstacle_angle/2), np.sin(obstacle_angle/2)]
+
       # Randomise object location.
       object_init_probs = [_P_IN_HAND, _P_IN_TARGET, 1-_P_IN_HAND-_P_IN_TARGET]
       init_type = choice(['in_hand', 'in_target', 'uniform'],
@@ -258,6 +269,7 @@ class Bring(base.Task):
       obs['object_pos'] = physics.body_2d_pose(self._object)
       obs['object_vel'] = physics.joint_vel(self._object_joints)
       obs['target_pos'] = physics.body_2d_pose(self._target)
+      obs['obstacle_pos'] = physics.body_2d_pose(self._obstacle)
     return obs
 
   def _is_close(self, distance):
@@ -284,3 +296,6 @@ class Bring(base.Task):
       return self._peg_reward(physics)
     else:
       return self._ball_reward(physics)
+
+  def get_constraint(self, physics):
+    return self._is_close(physics.site_distance('ball', 'obstacle_ball'))
