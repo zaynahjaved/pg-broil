@@ -237,9 +237,8 @@ if __name__ == '__main__':
     
     try:
         f = open("demonstrations/states_" + str(args.dem_num) + ".txt", "a")
-        assert linebuilder.feature[0] + linebuilder.feature[1] < HORIZON + 1, "ERROR: Number of states is greater than the HORIZON!"
-        print(linebuilder.feature)
-        linebuilder.feature[1] = HORIZON + 1 - linebuilder.feature[0]
+        assert linebuilder.env.feature[0] + linebuilder.env.feature[1] < HORIZON + 1, "ERROR: Number of states is greater than the HORIZON!"
+        linebuilder.env.feature[1] = HORIZON + 1 - linebuilder.env.feature[0]
         print(linebuilder.feature)
         f.write("\nFeature:" + str(linebuilder.feature))
         f.write("\n\nStates:" + str(linebuilder.states))

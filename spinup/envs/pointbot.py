@@ -46,11 +46,13 @@ class PointBot(Env, utils.EzPickle):
         self.B = np.array([[0,0], [1,0], [0,0], [0,1]])
         self.horizon = HORIZON
         self.action_space = Box(-np.ones(2) * MAX_FORCE, np.ones(2) * MAX_FORCE)
-        self.observation_space = Box(-np.ones(4) * np.float('inf'), np.ones(4) * np.float('inf'))
+        if TRASH:
+            self.observation_space = Box(-np.ones(6) * np.float('inf'), np.ones(6) * np.float('inf'))
+        else:
+            self.observation_space = Box(-np.ones(4) * np.float('inf'), np.ones(4) * np.float('inf'))
         self.start_state = START_STATE
         self.mode = MODE
         self.feature = [0, 1] #[red region, white space, garabage collected]
-        self.bonus = TRASH_BONUS
         self.obstacle = OBSTACLE[MODE]
         self.grid = [math.inf, -math.inf, math.inf, -math.inf]
         for i in range(len(self.obstacle.obs)):
@@ -60,7 +62,7 @@ class PointBot(Env, utils.EzPickle):
         if self.mode == 1:
             self.start_state = [-100, 0, 0, 0]
         if TRASH:
-            self.observation_space = Box(-np.ones(6) * np.float('inf'), np.ones(6) * np.float('inf'))
+            self.bonus = TRASH_BONUS
             self.trash_locs = TRASH_LOCS
             proper = True
             for i in range(NUM_TRASH_LOCS):
@@ -99,7 +101,7 @@ class PointBot(Env, utils.EzPickle):
         trash_bonus = self.determine_trash_bonus(self.state)
         self.augment_feature(self.state)
         next_state = self._next_state(self.state, a)
-        cur_cost = self.step_cost(self.state, a) # distance to the goal
+        cur_cost = self.step_cost(self.state, a) 
         self.rewards.append(-cur_cost + trash_bonus)
         self.state = next_state
         self.time += 1
@@ -108,15 +110,16 @@ class PointBot(Env, utils.EzPickle):
         return self.state, -cur_cost+trash_bonus, self.done, {}     # add information, boolean, obstacle = true or false whether collision or not, key to be in collsion
 
     def determine_trash_bonus(self, state):
-        if TRASH and math.sqrt(math.pow(state[4], 2) + math.pow(state[5], 2) * 1.0) < TRASH_RADIUS:
+        if TRASH and math.sqrt(math.pow(state[4], 2) + math.pow(state[5], 2) * 1.0) < TRASH_RADIUS: # if trash radius is big enough and 2 trash pieces can be taken away
             idx_true = [i for i, val in enumerate(self.remaining_trash) if val]
             if len(idx_true) > 0:
                 idx_true = idx_true[0]
                 self.remaining_trash_locs.remove(self.remaining_trash_locs[idx_true])
                 self.feature[2] += 1
                 self.remaining_trash.remove(True)
-            return self.bonus
+            return 0
         return 0
+
     def augment_feature(self, state):
         point = tuple((state[0], state[2]))
         obs = False
@@ -129,12 +132,18 @@ class PointBot(Env, utils.EzPickle):
 
     def reset(self):
         if TRASH:
-            self.state = self.start_state + np.random.randn(6) #don't add noise to trash heading
+            self.state = self.start_state #don't add noise to trash heading
         else:
             self.state = self.start_state + np.random.randn(4)
         self.time = 0       #expectiation better to go through obstacle small number (2), worst case better around (50)
         self.rewards = []
         self.done = False
+        if TRASH:
+            self.remaining_trash_locs = self.trash_locs[:]
+            self.remaining_trash = [False] * len(self.trash_locs)
+            self.feature = [0, 1, 0]
+        else:
+            self.feature = [0, 1]
         self.hist = [self.state]
         return self.state
 
@@ -149,7 +158,9 @@ class PointBot(Env, utils.EzPickle):
     def step_cost(self, s, a):
         if TRASH:
             s = s[:4]
-        return np.linalg.norm(np.subtract(GOAL_STATE, s)) + self.collision_cost(s)
+            return -np.dot(np.array(self.feature), np.array([-10,0,10]))
+        else:
+            return np.linalg.norm(np.subtract(GOAL_STATE, s)) + self.collision_cost(s)
 
     def collision_cost(self, obs):
         return COLLISION_COST * self.obstacle(obs)    #put this instide the dicitonary, in collision
