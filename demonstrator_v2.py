@@ -269,4 +269,6 @@ if __name__ == '__main__':
     pickle.dump(dic, p)
     p.close()
 
+    # d = pickle.load(open("demonstrations/features_" + str(args.dem_num) + ".pkl", "rb"))
+
     

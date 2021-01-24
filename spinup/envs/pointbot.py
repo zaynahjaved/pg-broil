@@ -132,7 +132,9 @@ class PointBot(Env, utils.EzPickle):
 
     def reset(self):
         if TRASH:
-            self.state = self.start_state #don't add noise to trash heading
+            without_heading = self.start_state[:4]
+            without_heading += np.random.randn(4)
+            self.state = np.concatenate((without_heading, self.start_state[4:])) #don't add noise to trash heading
         else:
             self.state = self.start_state + np.random.randn(4)
         self.time = 0       #expectiation better to go through obstacle small number (2), worst case better around (50)
