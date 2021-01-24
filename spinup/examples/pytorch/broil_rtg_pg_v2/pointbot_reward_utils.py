@@ -18,12 +18,18 @@ class PointBotReward():
     def __init__(self):
         self.posterior = np.array([0.4, 0.3, 0.2, .05, .05])
         self.penalties = np.array([20, 10, 0, -10, -100])
+
+        #self.posterior = np.array([0.4, 0.2, 0.1, 0.1, 0.2])
+        #self.penalties = np.array([30, 10, 0, -50, -100])
+
         # Note: expected value of penalty is .55. So, it actually skews us to go towards obstacles
         # The idea is to train BROIL in such a way that it avoids things in the worst case...meaning it'll learn to avoid obstacles
         # despite this. Normal PPO (w/o BROIL) hopefully can't accomplish this as well.
 
     def get_reward_distribution(self, env, obs):
         initial_reward = env.rewards[-1]  # NOTE: Be careful of this. If we ever want to get reward distributions from observations, this will be an issue
+
+        initial_reward += COLLISION_COST * env.obstacle(obs)
 
         if env.obstacle(obs) == 0:
             return np.array([initial_reward] * self.posterior.shape[0])

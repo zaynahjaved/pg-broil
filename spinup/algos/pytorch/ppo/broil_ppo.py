@@ -15,7 +15,7 @@ from spinup.examples.pytorch.broil_rtg_pg_v2.pointbot_reward_utils import PointB
 from spinup.examples.pytorch.broil_rtg_pg_v2.cartpole_reward_utils import CartPoleReward
 # from spinup.examples.pytorch.broil_rtg_pg_v2.cheetah_reward_utils import CheetahReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.reacher_reward_utils import ReacherReward
-from spinup.examples.pytorch.broil_rtg_pg_v2.shelf_reward_utils import ShelfReward
+#from spinup.examples.pytorch.broil_rtg_pg_v2.shelf_reward_utils import ShelfReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.cvar_utils import cvar_enumerate_pg
 import dmc2gym
 
@@ -269,7 +269,7 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
             total_rollout_steps = len(weights)
             broil_weights = np.zeros(total_rollout_steps, dtype=np.float64)
             for i, prob_r in enumerate(posterior_reward_weights):
-                if sigma > exp_batch_rets[i]:
+                if sigma >= exp_batch_rets[i]:
                     w_r_i = broil_lambda + (1 - broil_lambda) / (1 - broil_alpha)
                 else:
                     w_r_i = broil_lambda
@@ -536,8 +536,8 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
         print("Frac Constraint Violations: %d/%d" % (num_constraint_violations, num_episodes))
 
 
-    file_data = 'broil_data/'
-    experiment_name = args.env + '_alpha_' + str(broil_alpha) + '_lambda_' + str(lam)
+    file_data = 'broil_data_bimodal_distr4/'
+    experiment_name = args.env + '_alpha_' + str(broil_alpha) + '_lambda_' + str(broil_lambda)
 
     metrics = {"conditional value at risk": ('_cvar', cvar_list),
                "true_return": ('_true_return', ret_list),
@@ -554,7 +554,7 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
                 f.write("%s\n" % item)
 
     if args.env == 'PointBot-v0':
-        plt.ylim((-50, 70))
+        plt.ylim((-50, 150))
         plt.xlim((-125, 25))
         for i in range(5):
             x = trajectories_x[i]
@@ -582,10 +582,10 @@ if __name__ == '__main__':
     parser.add_argument('--seed', '-s', type=int, default=0)
     parser.add_argument('--cpu', type=int, default=1)
     parser.add_argument('--steps', type=int, default=4000)
-    parser.add_argument('--epochs', type=int, default=10)
+    parser.add_argument('--epochs', type=int, default=50)
     parser.add_argument('--exp_name', type=str, default='ppo')
     parser.add_argument('--render', type=bool, default=False)
-    parser.add_argument('--policy_lr', type=float, default=1e-2, help="learning rate for policy")
+    parser.add_argument('--policy_lr', type=float, default=3e-4, help="learning rate for policy")
     parser.add_argument('--value_lr', type=float, default=1e-3)
     parser.add_argument('--risk_metric', type=str, default='cvar', help='choice of risk metric, options are "cvar" or "erm"' )
     parser.add_argument('--broil_lambda', type=float, default=0.0, help="blending between cvar and expret")
