@@ -145,6 +145,7 @@ if __name__=="__main__":
     parser.add_argument('--mcmc_step_size', default = 0.5, type=float, help="proposal step is gaussian with zero mean and mcmc_step_size stdev")
     parser.add_argument('--confidence', default=1, type=int, help='confidence in rankings, the beta parameter in the softmax')
     parser.add_argument('--normalize', default=False, action='store_true', help='turns on normalization so the reward function weight vectors have norm of 1')
+    parser.add_argument('--features_dir', default='feature_files')
 
     args = parser.parse_args()
 
@@ -157,8 +158,12 @@ if __name__=="__main__":
                 'PointBotGrid_alpha_0.95_lambda_0.2_vflr_0.001_pilr_0.001_2020_12_08.txt',
                 'PointBotGrid_alpha_0_lambda_1_vflr_0.0001_pilr_0.01_2020_12_12.txt']
     """
-    pickle_files = ['features_1.pkl', 'features_2.pkl', 'features_3.pkl', 'features_4.pkl', 'features_5.pkl', 
-                    'features_6.pkl', 'features_7.pkl', 'features_8.pkl', 'features_9.pkl', 'features_10.pkl']
+    pickle_files = []
+    import os
+    for filename in os.listdir(args.features_dir):
+        if filename.endswith(".pkl"):
+            pickle_files.append(args.features_dir + "/" + filename)
+    print(pickle_files)
 
     demo_fcnts = []
     pairwise_prefs = []
