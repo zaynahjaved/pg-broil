@@ -40,6 +40,7 @@ class LineBuilder:
         self.yt = []
         self.typ = typ
         self.env = env
+        self.steps = 1
         self.state = env.reset()
         self.states = [self.state]
         self.cid = line.figure.canvas.mpl_connect('button_press_event', self)
@@ -64,14 +65,14 @@ class LineBuilder:
             else:
                 print("No TRASH on the field!")
         if event.key == 'a':
-            print("Current Feature: ", str(self.env.feature))
+            print("Current Feature: ", str(self.env.feature), " Remaining steps: " + str(HORIZON - self.steps))
         if event.key == 'e':
             if TRASH:
-                plt.savefig('demonstrations/visualization' + self.typ + "_" + str(args.dem_num) + '.png')
+                plt.savefig('demonstrations/visualization_' + self.typ + "_" + str(args.dem_num) + '.png')
                 plt.close()
             else:
                 if np.linalg.norm(np.subtract(GOAL_STATE, self.states[-1][:4])) <= GOAL_THRESH:
-                    plt.savefig('demonstrations/visualization' + self.typ + "_" + str(args.dem_num) + '.png')
+                    plt.savefig('demonstrations/visualization_' + self.typ + "_" + str(args.dem_num) + '.png')
                     plt.close()
                 else:
                     print("\nNot proper ending! X distance from END: " + str(self.xs[-1] - END_POS[0]) + " Y distance from END: " + str(self.ys[-1] - END_POS[1]))
@@ -80,6 +81,12 @@ class LineBuilder:
                 os.remove("demonstrations/states_" + str(args.dem_num) + ".txt")
         if event.key == 'g':
             if event.inaxes!=self.line.axes: return
+            
+            if self.steps == HORIZON:
+                plt.savefig('demonstrations/visualization_' + self.typ + "_" + str(args.dem_num) + '.png')
+                plt.close()
+                return
+
             final_x = END_POS[0]
             final_y = END_POS[1]
             init_x = self.xs[-1]
@@ -129,7 +136,7 @@ class LineBuilder:
 
             self.xs.append(new_state[0])
             self.ys.append(new_state[2])
-
+            self.steps += 1
             self.xv.append(new_state[1])
             self.yv.append(new_state[3])
             self.states.append(new_state)
@@ -138,7 +145,10 @@ class LineBuilder:
 
     def __call__(self, event):
         if event.inaxes!=self.line.axes: return
-        
+        if self.steps == HORIZON:
+            plt.savefig('demonstrations/visualization_' + self.typ + "_" + str(args.dem_num) + '.png')
+            plt.close()
+            return
         final_x = event.xdata
         final_y = event.ydata
         init_x = self.xs[-1]
@@ -189,6 +199,7 @@ class LineBuilder:
         self.xs.append(new_state[0])
         self.ys.append(new_state[2])
 
+        self.steps += 1
         self.xv.append(new_state[1])
         self.yv.append(new_state[3])
         self.states.append(new_state)
