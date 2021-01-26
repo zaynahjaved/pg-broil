@@ -55,6 +55,7 @@ class PointBot(Env, utils.EzPickle):
         self.feature = [0, 1] #[red region, white space, garabage collected]
         self.obstacle = OBSTACLE[MODE]
         self.grid = [math.inf, -math.inf, math.inf, -math.inf]
+        
         for i in range(len(self.obstacle.obs)):
             xbound = self.obstacle.obs[i].boundsx
             ybound = self.obstacle.obs[i].boundsy
@@ -64,6 +65,7 @@ class PointBot(Env, utils.EzPickle):
         if TRASH:
             self.bonus = TRASH_BONUS
             self.trash_locs = TRASH_LOCS
+            self.trash_taken = False
             proper = True
             for i in range(NUM_TRASH_LOCS):
                 if i >= len(TRASH_LOCS):
@@ -98,6 +100,7 @@ class PointBot(Env, utils.EzPickle):
 
     def step(self, a):
         a = process_action(a)
+        self.trash_taken = False
         trash_bonus = self.determine_trash_bonus(self.state)
         self.augment_feature(self.state)
         next_state = self._next_state(self.state, a)
@@ -117,7 +120,8 @@ class PointBot(Env, utils.EzPickle):
                 self.remaining_trash_locs.remove(self.remaining_trash_locs[idx_true])
                 self.feature[2] += 1
                 self.remaining_trash.remove(True)
-            return 0
+                self.trash_taken = True
+            return self.bonus
         return 0
 
     def augment_feature(self, state):
@@ -132,6 +136,7 @@ class PointBot(Env, utils.EzPickle):
 
     def reset(self):
         if TRASH:
+            self.trash_taken = False
             without_heading = self.start_state[:4]
             without_heading += np.random.randn(4)
             self.state = np.concatenate((without_heading, self.start_state[4:])) #don't add noise to trash heading
