@@ -141,7 +141,7 @@ def mcmc_map_search(pairwise_prefs, demo_cnts, num_steps, step_stdev, confidence
 if __name__=="__main__":
     parser = argparse.ArgumentParser(description=None)
     parser.add_argument('--seed', default=0, help="random seed for experiments")
-    parser.add_argument('--num_mcmc_steps', default=2000, type = int, help="number of proposals to generate for MCMC")
+    parser.add_argument('--num_mcmc_steps', default=200000, type = int, help="number of proposals to generate for MCMC")
     parser.add_argument('--mcmc_step_size', default = 0.5, type=float, help="proposal step is gaussian with zero mean and mcmc_step_size stdev")
     parser.add_argument('--confidence', default=1, type=int, help='confidence in rankings, the beta parameter in the softmax')
     parser.add_argument('--normalize', default=False, action='store_true', help='turns on normalization so the reward function weight vectors have norm of 1')
@@ -160,9 +160,10 @@ if __name__=="__main__":
     """
     pickle_files = []
     import os
-    for filename in os.listdir(args.features_dir):
-        if filename.endswith(".pkl"):
-            pickle_files.append(args.features_dir + "/" + filename)
+    for file_dir in ["general_demos", "good_demos", "bad_demos"]:
+        for filename in os.listdir(file_dir):
+            if filename.endswith(".pkl"):
+                pickle_files.append(file_dir + "/" + filename)
     print(pickle_files)
 
     demo_fcnts = []
@@ -171,12 +172,10 @@ if __name__=="__main__":
     for file in pickle_files:
         with open(file, 'rb') as handle:
             b = pickle.load(handle)
-            demo_fcnts += [b["Good"]]
             demo_fcnts += [b["Bad"]]
+            demo_fcnts += [b["Good"]]
             pairwise_prefs += [(counter, counter+1)]
             counter += 2
-
-
 
     print("Hand crafted feature expectations")
     #set seeds
@@ -210,6 +209,7 @@ if __name__=="__main__":
 
     #true pref ranking: 1,2,0,3
     #true_weights = np.array([-0.99, -.01]) #Currently only has 2 features
+    #true_weights = np.array([-1, -.01, 3])
 
     #traj_returns = np.dot(demo_fcnts, true_weights)
     #print("returns", traj_returns)
@@ -256,13 +256,56 @@ if __name__=="__main__":
         w = random.choice(chain)
         print(w)
 
+
+
+    #Start saving reward distribution
+    """
+    sampling_rate = 20
+    sampling_chain = chain[5000:]
+    bounds = ((0, -300), (0, -50)
+    box_size = 50
+
+    tally = np.zeros((int ((bounds[0][0] - bounds[0][1]) / float(box_size)), int ((bounds[1][0] - bounds[1][1]) / float(box_size))))
+    for i in range(sampling_chain.shape[0]):
+        w = sampling_chain[i]
+        x = abs(-w[0] // box_size)
+        y = abs(-w[1] // box_size)
+        if (y == 6 ):
+            print('y:' + str(y))
+        if (i%sampling_rate == 0) and (0 <= x < tally.shape[0]) and (0 <= y < tally.shape[1]):
+            tally[int(x), int(y)] += 1
+    print(tally.shape[0])
+    print(tally.shape[1])
+    print(tally)
+    tally = tally / float(np.sum(tally))
+    weight_to_prob = {}
+
+
+    for i in range(tally.shape[0]):
+        for j in range(tally.shape[1]):
+            if tally[i, j] > 0:
+                weight_to_prob[(-i * box_size - (box_size/2.0), -j * box_size - (box_size/2.0))] = tally[i, j]
+
+    print('WEIGHTS TO PROBABILITY')
+    print(weight_to_prob)
+
+    with open('brex_reward_dist.pickle', 'wb') as handle:
+        pickle.dump(weight_to_prob , handle, protocol=pickle.HIGHEST_PROTOCOL)
+    """
+    #End saving reward distribution
+
+
+
     import matplotlib.pyplot as plt
     plt.figure()
     plt.plot(log_liks)
     plt.title("log likelihoods")
     plt.figure()
+    lol = 0
     for i in range(num_features):
-        plt.plot(chain[:,i],label='feature ' + str(i))
+        lol += 1
+        if lol !=3:
+            plt.plot(chain[:,i],label='feature ' + str(i))
     plt.title("features")
     plt.legend()
     plt.show()
