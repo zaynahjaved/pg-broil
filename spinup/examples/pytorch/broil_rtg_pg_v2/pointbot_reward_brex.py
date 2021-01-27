@@ -34,7 +34,7 @@ class PointBotRewardBrex():
 
         if env.obstacle(obs) == 0:
             #return np.array([initial_reward] * self.posterior.shape[0])
-            return initial_reward + self.non_collision_penalty
+            return initial_reward + self.non_obstacle_penalty
         else:
-            extra_cost = self.collision_penalty * env.obstacle(obs)
+            extra_cost = self.obstacle_penalty * env.obstacle(obs)
             return initial_reward + extra_cost
