@@ -141,7 +141,7 @@ def mcmc_map_search(pairwise_prefs, demo_cnts, num_steps, step_stdev, confidence
 if __name__=="__main__":
     parser = argparse.ArgumentParser(description=None)
     parser.add_argument('--seed', default=0, help="random seed for experiments")
-    parser.add_argument('--num_mcmc_steps', default=200000, type = int, help="number of proposals to generate for MCMC")
+    parser.add_argument('--num_mcmc_steps', default=20000, type = int, help="number of proposals to generate for MCMC")
     parser.add_argument('--mcmc_step_size', default = 0.5, type=float, help="proposal step is gaussian with zero mean and mcmc_step_size stdev")
     parser.add_argument('--confidence', default=1, type=int, help='confidence in rankings, the beta parameter in the softmax')
     parser.add_argument('--normalize', default=False, action='store_true', help='turns on normalization so the reward function weight vectors have norm of 1')
@@ -160,7 +160,7 @@ if __name__=="__main__":
     """
     pickle_files = []
     import os
-    for file_dir in ["general_demos", "good_demos", "bad_demos"]:
+    for file_dir in ["demos_5"]:
         for filename in os.listdir(file_dir):
             if filename.endswith(".pkl"):
                 pickle_files.append(file_dir + "/" + filename)
@@ -257,25 +257,32 @@ if __name__=="__main__":
         print(w)
 
 
-
-    #Start saving reward distribution
     """
-    sampling_rate = 20
-    sampling_chain = chain[5000:]
-    bounds = ((0, -300), (0, -50)
-    box_size = 50
+    #Start saving reward distribution
+    sampling_rate = 400
+    sampling_chain = chain[100:]
+    bounds = ((-90, 0), (-90, 60), (0, 90))
+    box_size = 30
 
-    tally = np.zeros((int ((bounds[0][0] - bounds[0][1]) / float(box_size)), int ((bounds[1][0] - bounds[1][1]) / float(box_size))))
+    num_x_tallies = int ((bounds[0][1] - bounds[0][0]) / float(box_size))
+    num_y_tallies = int ((bounds[1][1] - bounds[1][0]) / float(box_size))
+    num_z_tallies = int ((bounds[2][1] - bounds[2][0]) / float(box_size))
+
+    tally = np.zeros((num_x_tallies, num_y_tallies, num_z_tallies))
     for i in range(sampling_chain.shape[0]):
         w = sampling_chain[i]
-        x = abs(-w[0] // box_size)
-        y = abs(-w[1] // box_size)
-        if (y == 6 ):
+
+        x = abs((w[0] - bounds[0][0]) // box_size)
+        y = abs((w[1] - bounds[1][0]) // box_size)
+        z = abs((w[2] - bounds[2][0]) // box_size)
+
+        if (y == 6):
             print('y:' + str(y))
-        if (i%sampling_rate == 0) and (0 <= x < tally.shape[0]) and (0 <= y < tally.shape[1]):
-            tally[int(x), int(y)] += 1
+        if (i%sampling_rate == 0) and (0 <= x < tally.shape[0]) and (0 <= y < tally.shape[1]) and (0 <= z < tally.shape[2]):
+            tally[int(x), int(y), int(z)] += 1
     print(tally.shape[0])
     print(tally.shape[1])
+    print(tally.shape[2])
     print(tally)
     tally = tally / float(np.sum(tally))
     weight_to_prob = {}
@@ -283,17 +290,17 @@ if __name__=="__main__":
 
     for i in range(tally.shape[0]):
         for j in range(tally.shape[1]):
-            if tally[i, j] > 0:
-                weight_to_prob[(-i * box_size - (box_size/2.0), -j * box_size - (box_size/2.0))] = tally[i, j]
+            for k in range(tally.shape[2]):
+                if tally[i, j, k] > 0:
+                    weight_to_prob[(bounds[0][0]+i * box_size + (box_size/2.0), bounds[1][0]+j * box_size + (box_size/2.0), bounds[2][0]+k * box_size + (box_size/2.0))] = tally[i, j, k]
 
     print('WEIGHTS TO PROBABILITY')
     print(weight_to_prob)
 
-    with open('brex_reward_dist.pickle', 'wb') as handle:
+    with open('brex_reward_dist_unnormalized.pickle', 'wb') as handle:
         pickle.dump(weight_to_prob , handle, protocol=pickle.HIGHEST_PROTOCOL)
-    """
     #End saving reward distribution
-
+    """
 
 
     import matplotlib.pyplot as plt
@@ -301,10 +308,7 @@ if __name__=="__main__":
     plt.plot(log_liks)
     plt.title("log likelihoods")
     plt.figure()
-    lol = 0
     for i in range(num_features):
-        lol += 1
-        if lol !=3:
             plt.plot(chain[:,i],label='feature ' + str(i))
     plt.title("features")
     plt.legend()
