@@ -32,7 +32,10 @@ class Obstacle:
             x_sum = tf.reduce_sum(x, axis=-1) # This is a bad way to do this but works for now, just using this for shape
             return tf.where(condition, self.penalty * tf.ones_like(x_sum), tf.zeros_like(x_sum))
             # return (self.boundsx[0] <= x[0] <= self.boundsx[1] and self.boundsy[0] <= x[2] <= self.boundsy[1]) * 10000
-
+    def in_obs(self, point, buffer):
+        if self.boundsx[0] - buffer <= point[0] and point[0] <= self.boundsx[1] + buffer and self.boundsy[0] - buffer <= point[1] and point[1] <= self.boundsy[1] + buffer:
+            return True
+        return False
 class ComplexObstacle(Obstacle):
 
     def __init__(self, bounds):

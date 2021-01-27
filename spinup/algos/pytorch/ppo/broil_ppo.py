@@ -8,6 +8,7 @@ import time
 from tqdm import tqdm
 import os, sys
 import spinup.algos.pytorch.vpg.core as core
+from spinup.envs.pointbot_const import *
 from spinup.utils.logx import EpochLogger
 from spinup.utils.mpi_pytorch import setup_pytorch_for_mpi, sync_params, mpi_avg_grads
 from spinup.utils.mpi_tools import mpi_fork, mpi_avg, proc_id, mpi_statistics_scalar, num_procs
@@ -15,13 +16,9 @@ from spinup.examples.pytorch.broil_rtg_pg_v2.pointbot_reward_utils import PointB
 from spinup.examples.pytorch.broil_rtg_pg_v2.cartpole_reward_utils import CartPoleReward
 # from spinup.examples.pytorch.broil_rtg_pg_v2.cheetah_reward_utils import CheetahReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.reacher_reward_utils import ReacherReward
-<<<<<<< HEAD
-#from spinup.examples.pytorch.broil_rtg_pg_v2.shelf_reward_utils import ShelfReward
-=======
 from spinup.examples.pytorch.broil_rtg_pg_v2.manipulator_reward_utils import ManipulatorReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.safety_gym_reward_utils import SafetyGymReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.shelf_reward_utils import ShelfReward
->>>>>>> aace91845a3589bd7ab3320be7809891b16bdfdd
 from spinup.examples.pytorch.broil_rtg_pg_v2.cvar_utils import cvar_enumerate_pg
 import dmc2gym
 
@@ -264,7 +261,6 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
 
         #first find the expected on-policy return for current policy under each reward function in the posterior
         exp_batch_rets = np.mean(batch_rets.numpy(), axis=0)
-        print(exp_batch_rets)
         posterior_reward_weights = reward_dist.posterior
 
 
@@ -546,7 +542,7 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
         print("Frac Constraint Violations: %d/%d" % (num_constraint_violations, num_episodes))
 
 
-    file_data = 'broil_data_bimodal_distr4/'
+    file_data = 'broil_data_106/'
     experiment_name = args.env + '_alpha_' + str(broil_alpha) + '_lambda_' + str(broil_lambda)
 
     metrics = {"conditional value at risk": ('_cvar', cvar_list),
@@ -558,23 +554,26 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
     for metric, result in metrics.items():
         file_metric_description, results = result
         file_path = file_data + 'results/' + experiment_name + file_metric_description + '.txt'
-        assert not os.path.isfile(file_path)  # make sure we are making a new file and not overwriting
+        #assert not os.path.isfile(file_path)  # make sure we are making a new file and not overwriting
         with open(file_path, 'w') as f:
             for item in results:
                 f.write("%s\n" % item)
 
     if args.env == 'PointBot-v0':
-        plt.ylim((-50, 150))
-        plt.xlim((-125, 25))
-        for i in range(5):
+        plt.ylim((env.grid[2], env.grid[3]))
+        plt.xlim((env.grid[0], env.grid[1]))
+        for i in range(4):
             x = trajectories_x[i]
             y = trajectories_y[i]
-            plt.scatter(x, y)
+            plt.scatter(x, y, len(x)*[10], zorder=1)
 
         x_bounds = [obstacle.boundsx for obstacle in env.obstacle.obs]
         y_bounds = [obstacle.boundsy for obstacle in env.obstacle.obs]
         for i in range(len(x_bounds)):
-            plt.gca().add_patch(patches.Rectangle((x_bounds[i][0], y_bounds[i][0]), width=x_bounds[i][1] - x_bounds[i][0], height=y_bounds[i][1] - y_bounds[i][0], fill=True, alpha=.5))
+                plt.gca().add_patch(patches.Rectangle((x_bounds[i][0], y_bounds[i][0]), width=x_bounds[i][1] - x_bounds[i][0], height=y_bounds[i][1] - y_bounds[i][0], fill=True, alpha=.5, linewidth=1, zorder = 0, edgecolor='#d3d3d3',facecolor='#d3d3d3'))
+        if TRASH:
+            for i in range(NUM_TRASH_LOCS):
+                plt.scatter([env.trash_locs[i][0]],[env.trash_locs[i][1]], [20], zorder = 10, color = '#000000')
         plt.savefig(file_data + 'visualizations/' + experiment_name + '.png')
         plt.clf()
         #torch.save(ac.state_dict(), file_data + 'PointBot_networks/' + experiment_name + '.txt')
@@ -598,8 +597,8 @@ if __name__ == '__main__':
     parser.add_argument('--policy_lr', type=float, default=3e-4, help="learning rate for policy")
     parser.add_argument('--value_lr', type=float, default=1e-3)
     parser.add_argument('--risk_metric', type=str, default='cvar', help='choice of risk metric, options are "cvar" or "erm"' )
-    parser.add_argument('--broil_lambda', type=float, default=0.0, help="blending between cvar and expret")
-    parser.add_argument('--broil_alpha', type=float, default=0.0, help="risk sensitivity for cvar")
+    parser.add_argument('--broil_lambda', type=float, default=1, help="blending between cvar and expret")
+    parser.add_argument('--broil_alpha', type=float, default=0.95, help="risk sensitivity for cvar")
     parser.add_argument('--clone', action="store_true", help="do behavior cloning")
     parser.add_argument('--num_demos', type=int, default=0)
     args = parser.parse_args()
