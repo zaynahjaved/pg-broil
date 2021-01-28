@@ -420,6 +420,7 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
     obstacle_list = []
     trajectories_x = []
     trajectories_y = []
+    trash_trajectories = []
 
     # Behavior clone policy on some initial demos
     if clone and num_demos > 0:
@@ -504,6 +505,8 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
                     if epoch == epochs - 1:
                         trajectories_x.append(last_trajectory[:, 0])
                         trajectories_y.append(last_trajectory[:, 2])
+                        env.current_trash_taken.append(env.next_trash)
+                        trash_trajectories.append(env.current_trash_taken)
 
                 o, ep_ret, ep_len = env.reset(), 0, 0
 
@@ -542,7 +545,7 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
         print("Frac Constraint Violations: %d/%d" % (num_constraint_violations, num_episodes))
 
 
-    file_data = 'broil_data_106/'
+    file_data = 'broil_data_108/'
     experiment_name = args.env + '_alpha_' + str(broil_alpha) + '_lambda_' + str(broil_lambda)
 
     metrics = {"conditional value at risk": ('_cvar', cvar_list),
@@ -560,20 +563,22 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
                 f.write("%s\n" % item)
 
     if args.env == 'PointBot-v0':
+        print(trash_trajectories)
         plt.ylim((env.grid[2], env.grid[3]))
         plt.xlim((env.grid[0], env.grid[1]))
-        for i in range(4):
+        for i in range(1):
             x = trajectories_x[i]
             y = trajectories_y[i]
-            plt.scatter(x, y, len(x)*[10], zorder=1)
+            plt.scatter(x, y, len(x)*[6], zorder=1)
+            if TRASH:
+                for j in trash_trajectories[i]:
+                    plt.scatter([j[0]],[j[1]], [25], zorder = 10, color = '#000000')
 
         x_bounds = [obstacle.boundsx for obstacle in env.obstacle.obs]
         y_bounds = [obstacle.boundsy for obstacle in env.obstacle.obs]
         for i in range(len(x_bounds)):
-                plt.gca().add_patch(patches.Rectangle((x_bounds[i][0], y_bounds[i][0]), width=x_bounds[i][1] - x_bounds[i][0], height=y_bounds[i][1] - y_bounds[i][0], fill=True, alpha=.5, linewidth=1, zorder = 0, edgecolor='#d3d3d3',facecolor='#d3d3d3'))
-        if TRASH:
-            for i in range(NUM_TRASH_LOCS):
-                plt.scatter([env.trash_locs[i][0]],[env.trash_locs[i][1]], [20], zorder = 10, color = '#000000')
+            plt.gca().add_patch(patches.Rectangle((x_bounds[i][0], y_bounds[i][0]), width=x_bounds[i][1] - x_bounds[i][0], height=y_bounds[i][1] - y_bounds[i][0], fill=True, alpha=.5, linewidth=1, zorder = 0, edgecolor='#d3d3d3',facecolor='#d3d3d3'))
+        
         plt.savefig(file_data + 'visualizations/' + experiment_name + '.png')
         plt.clf()
         #torch.save(ac.state_dict(), file_data + 'PointBot_networks/' + experiment_name + '.txt')

@@ -64,39 +64,31 @@ class PointBot(Env, utils.EzPickle):
             self.start_state = [-100, 0, 0, 0]
         if TRASH:
             self.bonus = TRASH_BONUS
-            self.trash_locs = TRASH_LOCS
             self.trash_taken = False
             proper = True
-            for i in range(NUM_TRASH_LOCS):
-                if i >= len(TRASH_LOCS):
-                    proper = False
-                    point = 0
-                    while(not proper):
-                        proper = True
-                        x = random.uniform(self.grid[0] + TRASH_BUFFER, self.grid[1] - TRASH_BUFFER)
-                        y = random.uniform(self.grid[2] + TRASH_BUFFER, self.grid[3] - TRASH_BUFFER)
-                        point = tuple((x, y))
-                        for i in range(len(self.obstacle.obs)):
-                            if self.obstacle.obs[i].in_obs(point, TRASH_BUFFER):
-                                proper = False
-                    self.trash_locs.append(point)
-            self.remaining_trash_locs = self.trash_locs[:]
-            self.remaining_trash = [False] * len(self.trash_locs)
+            self.current_trash_taken = []
+            self.next_trash = self.generate_trash()
             self.start_state = START_STATE + self.closest_trash(START_STATE)
             self.feature = [0, 1, 0]
     
     def closest_trash(self, state):
-        closest_dist = math.inf
         curr = START_POS # if there are no more trash locations then heading to START_POS is used
-        for i in range(len(self.remaining_trash_locs)):
-            point = self.remaining_trash_locs[i]
-            close_dist = math.sqrt(math.pow(point[0] - state[0], 2) + math.pow(point[1] - state[2], 2) * 1.0)
-            if close_dist < closest_dist:
-                closest_dist = close_dist
-                curr = point
-                self.remaining_trash = [False] * len(self.remaining_trash)
-                self.remaining_trash[i] = True
+        close_dist = math.sqrt(math.pow(self.next_trash[0] - state[0], 2) + math.pow(self.next_trash[1] - state[2], 2) * 1.0)
+        curr = self.next_trash
         return [curr[0] - state[0], curr[1] - state[2]]
+
+    def generate_trash(self):
+        proper = False
+        point = 0
+        while(not proper):
+            proper = True
+            x = random.uniform(self.grid[0] + TRASH_BUFFER, self.grid[1] - TRASH_BUFFER)
+            y = random.uniform(self.grid[2] + TRASH_BUFFER, self.grid[3] - TRASH_BUFFER)
+            point = tuple((x, y))
+            for i in range(len(self.obstacle.obs)):
+                if self.obstacle.obs[i].in_obs(point, TRASH_BUFFER):
+                    proper = False
+        return point
 
     def step(self, a):
         a = process_action(a)
@@ -116,18 +108,12 @@ class PointBot(Env, utils.EzPickle):
         if TRASH:
             t_x, t_y = state[4], state[5]
             number_collected = 0
-            while math.sqrt(math.pow(t_x, 2) + math.pow(t_y, 2) * 1.0) < TRASH_RADIUS and len(self.remaining_trash) > 0:
-                idx_true = [i for i, val in enumerate(self.remaining_trash) if val]
-                if len(idx_true) > 0:
-                    idx_true = idx_true[0]
-                    self.remaining_trash_locs.remove(self.remaining_trash_locs[idx_true])
-                    self.feature[2] += 1
-                    self.remaining_trash.remove(True)
-                    self.trash_taken = True
-                    number_collected += 1
-                next_closest = self.closest_trash(state)
-                t_x, t_y = next_closest[0], next_closest[1]
-            return self.bonus * number_collected
+            if math.sqrt(math.pow(t_x, 2) + math.pow(t_y, 2) * 1.0) < TRASH_RADIUS:
+                self.feature[2] += 1
+                self.trash_taken = True
+                self.current_trash_taken.append(self.next_trash)
+                self.next_trash = self.generate_trash()
+            return self.bonus
         return 0
 
     def augment_feature(self, state):
@@ -145,6 +131,7 @@ class PointBot(Env, utils.EzPickle):
             self.trash_taken = False
             without_heading = self.start_state[:4]
             without_heading += np.random.randn(4) * NOISE_SCALE
+            self.next_trash = self.generate_trash()
             self.state = np.concatenate((without_heading, self.closest_trash(without_heading))) #don't add noise to trash heading
         else:
             self.state = self.start_state + np.random.randn(4) * NOISE_SCALE
@@ -152,8 +139,7 @@ class PointBot(Env, utils.EzPickle):
         self.rewards = []
         self.done = False
         if TRASH:
-            self.remaining_trash_locs = self.trash_locs[:]
-            self.remaining_trash = [False] * len(self.trash_locs)
+            self.current_trash_taken = []
             self.feature = [0, 1, 0]
         else:
             self.feature = [0, 1]
@@ -171,7 +157,7 @@ class PointBot(Env, utils.EzPickle):
     def step_cost(self, s, a):
         if TRASH:
             s = s[:4]
-            return -np.dot(np.array(self.feature), np.array([-0.1, 0, 1]))
+            return -np.dot(np.array(self.feature), np.array([-1, 0, 10]))
         else:
             return np.linalg.norm(np.subtract(GOAL_STATE, s)) + self.collision_cost(s)
 

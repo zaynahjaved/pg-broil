@@ -56,12 +56,7 @@ class LineBuilder:
             print("Most recent state: ", str(self.states[-1]), "\n states: ", str(self.states))
         if event.key == 't':
             if TRASH:
-                if len(self.env.remaining_trash) is not 0:
-                    print("Closest Trash X: ", str(self.env.closest_trash(self.env.state)[0]), " Y: ", str(self.env.closest_trash(self.env.state)[1]))
-                else:
-                    print("No more TRASH on the field!")
-                    plt.savefig('demonstrations/visualization_' + self.typ + "_" + str(args.dem_num) + '.png')
-                    plt.close()
+                print("Closest Trash X: ", str(self.env.closest_trash(self.env.state)[0]), " Y: ", str(self.env.closest_trash(self.env.state)[1]))
             else:
                 print("No TRASH on the field!")
         if event.key == 'a':
@@ -134,6 +129,9 @@ class LineBuilder:
             act = tuple((x_f, y_f))
             new_state, _, _, _ = self.env.step(act)
 
+            if TRASH:
+                plt.scatter([self.env.next_trash[0]],[self.env.next_trash[1]], [20], '#000000')
+
             self.xs.append(new_state[0])
             self.ys.append(new_state[2])
             self.steps += 1
@@ -196,6 +194,8 @@ class LineBuilder:
         act = tuple((x_f, y_f))
         new_state, _, _, _ = self.env.step(act)
 
+        if TRASH:
+            plt.scatter([self.env.next_trash[0]],[self.env.next_trash[1]], [20], '#000000')
         self.xs.append(new_state[0])
         self.ys.append(new_state[2])
 
@@ -220,8 +220,7 @@ def init(typ="Good"):
         rect = patches.Rectangle((xbound[0],ybound[0]),abs(xbound[1] - xbound[0]),abs(ybound[1] - ybound[0]),linewidth=1, zorder = 0, edgecolor='#d3d3d3',facecolor='#d3d3d3', fill = True)
         ax.add_patch(rect)
     if TRASH:
-        for i in env.trash_locs:
-            ax.scatter([i[0]],[i[1]], [8], '#000000')
+        plt.scatter([env.next_trash[0]],[env.next_trash[1]], [25], '#000000')
 
     ax.scatter([START_POS[0]],[START_POS[1]],  [5], '#00FF00')
     if not TRASH:
@@ -254,7 +253,7 @@ def end(linebuilder, typ="Good"):
         f.write("\nFeature: " + str(linebuilder.env.feature))
         f.write("\n\nStates: " + str(linebuilder.states))
         if TRASH:
-            f.write("\n\nTrash Locations: "+ str(linebuilder.env.trash_locs))
+            f.write("\n\nTrash Locations: "+ str(linebuilder.env.current_trash_taken))
         f.close()
         return linebuilder.env.feature
     except AssertionError as msg:  

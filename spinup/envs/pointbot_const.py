@@ -3,7 +3,7 @@ from .obstacle import Obstacle, ComplexObstacle
 """
 Constants associated with the PointBot env.
 """
-START_POS = [-90, 20]
+START_POS = [25, 25]
 END_POS = [0, 0]
 GOAL_THRESH = 4.
 START_STATE = [START_POS[0], 0, START_POS[1], 0]
@@ -11,20 +11,20 @@ GOAL_STATE = [END_POS[0], 0, END_POS[1], 0]
 
 TRASH = True
 TRASH_BONUS = 0
-TRASH_RADIUS = 5
-NUM_TRASH_LOCS = 5
-TRASH_LOCS = [(-65, -62),] #bottom right
+TRASH_RADIUS = 1.5
+#NUM_TRASH_LOCS = 5
+#TRASH_LOCS = [(-65, -62),] #bottom right
 #TRASH_LOCS = [(-95, 30)] #top left
 TRASH_BUFFER = 10
 
-MAX_FORCE = 1
-HORIZON = 100
+MAX_FORCE = 0.5
+HORIZON = 50
 
-NOISE_SCALE = 0.05
+NOISE_SCALE = 0
 AIR_RESIST = 0.2
 
 COLLISION_COST = 0
-MODE = 9
+MODE = 10
 
 OBSTACLE = {
 	1: ComplexObstacle([[[-1000, -999], [-1000, -999]]]),
@@ -35,6 +35,7 @@ OBSTACLE = {
 	6: ComplexObstacle([[[-150, -25], [-20, 70]], [[-150, -25], [100, 190]]]),
 	7: ComplexObstacle([[[-155, -110], [-190, -80]], [[-200, -155], [-190, -140]], [[-70, -25], [-130, 50]], [[-155, -110], [10, 90]], [[-200, 20], [90, 140]], [[-250, -200], [-190, 140]]]),
 	8: ComplexObstacle([[[-200, -75], [-190, -140]], [[-75, -25], [-190, 140]], [[-200, -75], [90, 140]], [[-250, -200], [-190, 140]]]),
-	9: ComplexObstacle([[[-100, -40], [-95, -70]], [[-40, -15], [-95, 70]], [[-100, -40], [45, 70]], [[-125, -100], [-95, 70]]]) 
+	9: ComplexObstacle([[[-100, -40], [-95, -70]], [[-40, -15], [-95, 70]], [[-100, -40], [45, 70]], [[-125, -100], [-95, 70]]]),
+	10: ComplexObstacle([[[0, 40], [-10, 10]], [[0, 40], [50, 70]], [[-20, 0], [-10, 70]], [[40, 60], [-10, 70]]])
 
 }
