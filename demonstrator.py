@@ -40,7 +40,7 @@ class LineBuilder:
         self.yt = []
         self.typ = typ
         self.env = env
-        self.steps = 1
+        self.steps = 0
         self.state = env.state
         self.states = [self.state]
         self.actions = []
