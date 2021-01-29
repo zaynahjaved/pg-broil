@@ -160,8 +160,6 @@ class LineBuilder:
         x_f = diff_x
         y_f = diff_y
 
-        print(x_f, y_f)
-
         
         if diff_x >= 0 and diff_y >= 0:
             if abs(diff_x) >= abs(diff_y):
@@ -254,8 +252,6 @@ def end(linebuilder, typ="Good"):
     
     try:
         f = open("demonstrations/states_" + str(args.dem_num) + ".txt", "a")
-        print(linebuilder.env.feature)
-        print(len(linebuilder.states), len(linebuilder.actions))
         f.write("\n" + typ)
         f.write("\nFeature: " + str(linebuilder.env.feature))
         f.write("\n\nStates: " + str(linebuilder.states))
