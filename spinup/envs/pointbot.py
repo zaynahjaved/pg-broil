@@ -50,7 +50,7 @@ class PointBot(Env, utils.EzPickle):
             self.observation_space = Box(-np.ones(6) * np.float('inf'), np.ones(6) * np.float('inf'))
         else:
             self.observation_space = Box(-np.ones(4) * np.float('inf'), np.ones(4) * np.float('inf'))
-        self.start_state = START_STATE
+        
         self.mode = MODE
         self.feature = [0, 1] #[red region, white space, garabage collected]
         self.obstacle = OBSTACLE[MODE]
@@ -60,6 +60,7 @@ class PointBot(Env, utils.EzPickle):
             xbound = self.obstacle.obs[i].boundsx
             ybound = self.obstacle.obs[i].boundsy
             self.grid = [min(self.grid[0], xbound[0]), max(self.grid[1], xbound[1]), min(self.grid[2], ybound[0]), max(self.grid[3], ybound[1])]
+        self.start_state = self.generate_start()
         if self.mode == 1:
             self.start_state = [-100, 0, 0, 0]
         if TRASH:
@@ -68,7 +69,8 @@ class PointBot(Env, utils.EzPickle):
             proper = True
             self.current_trash_taken = []
             self.next_trash = self.generate_trash()
-            self.start_state = START_STATE + self.closest_trash(START_STATE)
+            start_state = self.generate_start()
+            self.start_state = start_state + self.closest_trash(start_state)
             self.feature = [0, 1, 0]
     
     def closest_trash(self, state):
@@ -90,12 +92,26 @@ class PointBot(Env, utils.EzPickle):
                     proper = False
         return point
 
+    def generate_start(self):
+        proper = False
+        point, x, y = 0, 0, 0
+        while(not proper):
+            proper = True
+            x = random.uniform(self.grid[0] + START_BUFFER, self.grid[1] - START_BUFFER)
+            y = random.uniform(self.grid[2] + START_BUFFER, self.grid[3] - START_BUFFER)
+            point = tuple((x, y))
+            for i in range(len(self.obstacle.obs)):
+                if self.obstacle.obs[i].in_obs(point, START_BUFFER):
+                    proper = False
+        return [x, 0, y, 0]
+
     def step(self, a):
         a = process_action(a)
+        self.curr_action = a
         self.trash_taken = False
-        self.augment_feature(self.state)
         next_state = self._next_state(self.state, a)
         trash_bonus = self.determine_trash_bonus(next_state)
+        self.augment_feature(self.state, self.trash_taken)
         cur_cost = self.step_cost(self.state, a) 
         self.rewards.append(-cur_cost + trash_bonus)
         self.state = next_state
@@ -116,23 +132,24 @@ class PointBot(Env, utils.EzPickle):
             return self.bonus
         return 0
 
-    def augment_feature(self, state):
-        point = tuple((state[0], state[2]))
-        obs = False
-        for i in range(len(self.obstacle.obs)):
-            if self.obstacle.obs[i].in_obs(point, 0): #point within obstacle region
-                self.feature[0] += 1
-                obs = True
-        if not obs:
-            self.feature[1] += 1
+    def augment_feature(self, state, trash_taken):
+        if not trash_taken:
+            point = tuple((state[0], state[2]))
+            obs = False
+            for i in range(len(self.obstacle.obs)):
+                if self.obstacle.obs[i].in_obs(point, 0): #point within obstacle region
+                    self.feature[0] += 1
+                    obs = True
+            if not obs:
+                self.feature[1] += 1
 
     def reset(self):
         if TRASH:
             self.trash_taken = False
-            without_heading = self.start_state[:4]
+            without_heading = self.generate_start()
             without_heading += np.random.randn(4) * NOISE_SCALE
             self.next_trash = self.generate_trash()
-            self.state = np.concatenate((without_heading, self.closest_trash(without_heading))) #don't add noise to trash heading
+            self.state = np.concatenate((without_heading, self.closest_trash(without_heading)))
         else:
             self.state = self.start_state + np.random.randn(4) * NOISE_SCALE
         self.time = 0       #expectiation better to go through obstacle small number (2), worst case better around (50)
@@ -157,7 +174,7 @@ class PointBot(Env, utils.EzPickle):
     def step_cost(self, s, a):
         if TRASH:
             s = s[:4]
-            return -np.dot(np.array(self.feature), np.array([-1, 0, 10]))
+            return -np.dot(np.array(self.feature), np.array([-1, 0, 5]))
         else:
             return np.linalg.norm(np.subtract(GOAL_STATE, s)) + self.collision_cost(s)
 

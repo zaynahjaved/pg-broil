@@ -569,7 +569,8 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
         for i in range(1):
             x = trajectories_x[i]
             y = trajectories_y[i]
-            plt.scatter(x, y, len(x)*[6], zorder=1)
+            plt.scatter([x[0]],[y[0]],  [6], '#00FF00', zorder=11)
+            plt.scatter(x[1:], y[1:], len(x)*[6], zorder=9)
             if TRASH:
                 for j in trash_trajectories[i]:
                     plt.scatter([j[0]],[j[1]], [25], zorder = 10, color = '#000000')
