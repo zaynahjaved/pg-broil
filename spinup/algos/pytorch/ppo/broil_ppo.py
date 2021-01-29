@@ -7,19 +7,20 @@ import gym
 import time
 from tqdm import tqdm
 import os, sys
-import spinup.algos.pytorch.vpg.core as core
-from spinup.envs.pointbot_const import *
-from spinup.utils.logx import EpochLogger
-from spinup.utils.mpi_pytorch import setup_pytorch_for_mpi, sync_params, mpi_avg_grads
-from spinup.utils.mpi_tools import mpi_fork, mpi_avg, proc_id, mpi_statistics_scalar, num_procs
+import core
+from pointbot_const import *
+from logx import EpochLogger
+from mpi_pytorch import setup_pytorch_for_mpi, sync_params, mpi_avg_grads
+from mpi_tools import mpi_fork, mpi_avg, proc_id, mpi_statistics_scalar, num_procs
 from spinup.examples.pytorch.broil_rtg_pg_v2.pointbot_reward_utils import PointBotReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.cartpole_reward_utils import CartPoleReward
-# from spinup.examples.pytorch.broil_rtg_pg_v2.cheetah_reward_utils import CheetahReward
+from spinup.examples.pytorch.broil_rtg_pg_v2.cheetah_reward_utils import CheetahReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.reacher_reward_utils import ReacherReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.manipulator_reward_utils import ManipulatorReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.safety_gym_reward_utils import SafetyGymReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.shelf_reward_utils import ShelfReward
-from spinup.examples.pytorch.broil_rtg_pg_v2.cvar_utils import cvar_enumerate_pg
+from spinup.examples.pytorch.broil_rtg_pg_v2.pointbot_reward_brex import PointBotRewardBrex
+from cvar_utils import cvar_enumerate_pg
 import dmc2gym
 
 torchify = lambda x: torch.FloatTensor(x).to(torch.device('cpu'))
@@ -269,7 +270,7 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
             #Calculate policy gradient for conditional value at risk
 
             sigma, cvar = cvar_enumerate_pg(exp_batch_rets, posterior_reward_weights, broil_alpha)
-            print("sigma = {}, cvar = {}".format(sigma, cvar))
+           # print("sigma = {}, cvar = {}".format(sigma, cvar))
 
             #compute BROIL policy gradient weights
             total_rollout_steps = len(weights)
@@ -505,8 +506,8 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
                     if epoch == epochs - 1:
                         trajectories_x.append(last_trajectory[:, 0])
                         trajectories_y.append(last_trajectory[:, 2])
-                        env.current_trash_taken.append(env.next_trash)
-                        trash_trajectories.append(env.current_trash_taken)
+                       # env.current_trash_taken.append(env.next_trash)
+                       # trash_trajectories.append(env.current_trash_taken)
 
                 o, ep_ret, ep_len = env.reset(), 0, 0
 
@@ -564,9 +565,9 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
 
     if args.env == 'PointBot-v0':
         print(trash_trajectories)
-        plt.ylim((env.grid[2], env.grid[3]))
-        plt.xlim((env.grid[0], env.grid[1]))
-        for i in range(1):
+        plt.ylim((-100, 100))
+        plt.xlim((-100, 100))
+        for i in range(5):
             x = trajectories_x[i]
             y = trajectories_y[i]
             plt.scatter([x[0]],[y[0]],  [6], '#00FF00', zorder=11)
@@ -612,12 +613,13 @@ if __name__ == '__main__':
     mpi_fork(args.cpu)  # run parallel code with mpi
 
     from spinup.utils.run_utils import setup_logger_kwargs
+
     logger_kwargs = setup_logger_kwargs(args.exp_name, args.seed)
 
     if args.env == 'CartPole-v0':
         reward_dist = CartPoleReward()
     elif args.env == 'PointBot-v0':
-        reward_dist = PointBotReward()
+        reward_dist = PointBotRewardBrex()
     elif args.env == 'HalfCheetah-v2':
         reward_dist = CheetahReward()
     elif args.env == 'Shelf-v0':
