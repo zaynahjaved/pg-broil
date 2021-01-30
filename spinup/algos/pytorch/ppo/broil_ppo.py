@@ -7,11 +7,11 @@ import gym
 import time
 from tqdm import tqdm
 import os, sys
-import core
 from pointbot_const import *
-from logx import EpochLogger
-from mpi_pytorch import setup_pytorch_for_mpi, sync_params, mpi_avg_grads
-from mpi_tools import mpi_fork, mpi_avg, proc_id, mpi_statistics_scalar, num_procs
+import spinup.algos.pytorch.ppo.core as core
+from spinup.utils.logx import EpochLogger
+from spinup.utils.mpi_pytorch import setup_pytorch_for_mpi, sync_params, mpi_avg_grads
+from spinup.utils.mpi_tools import mpi_fork, mpi_avg, proc_id, mpi_statistics_scalar, num_procs
 from spinup.examples.pytorch.broil_rtg_pg_v2.pointbot_reward_utils import PointBotReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.cartpole_reward_utils import CartPoleReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.cheetah_reward_utils import CheetahReward
@@ -19,7 +19,7 @@ from spinup.examples.pytorch.broil_rtg_pg_v2.reacher_reward_utils import Reacher
 from spinup.examples.pytorch.broil_rtg_pg_v2.manipulator_reward_utils import ManipulatorReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.safety_gym_reward_utils import SafetyGymReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.shelf_reward_utils import ShelfReward
-from spinup.examples.pytorch.broil_rtg_pg_v2.pointbot_reward_brex import PointBotRewardBrex
+from pointbot_reward_brex import PointBotRewardBrex
 from cvar_utils import cvar_enumerate_pg
 import dmc2gym
 
@@ -407,7 +407,7 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
         logger.store(LossPi=pi_l_old, LossV=v_l_old,
                      KL=kl, Entropy=ent,
                      DeltaLossPi=(loss_pi.item() - pi_l_old),
-                     DeltaLossV=(loss_v.item() - v_l_old))
+                     DeltaLossV=(loss_v.item() - v_l_old), Risk=cvar, ExpectedRet=np.dot(np.mean(data['p_returns'].numpy(), axis=0), reward_dist.posterior))
         running_cvar.append(cvar)
 
     # Prepare for interaction with environment
@@ -422,7 +422,8 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
     trajectories_x = []
     trajectories_y = []
     trash_trajectories = []
-
+    num_trashes = []
+    obs_times = []
     # Behavior clone policy on some initial demos
     if clone and num_demos > 0:
         for i in range(train_pi_BC_iters):
@@ -503,11 +504,13 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
 
                 if args.env == 'PointBot-v0':
                     last_trajectory = np.array(env.hist)
+                    obs_times.append(env.obs_time/100)
+                    num_trashes.append(len(env.current_trash_taken))
                     if epoch == epochs - 1:
                         trajectories_x.append(last_trajectory[:, 0])
                         trajectories_y.append(last_trajectory[:, 2])
-                       # env.current_trash_taken.append(env.next_trash)
-                       # trash_trajectories.append(env.current_trash_taken)
+                        env.current_trash_taken.append(env.next_trash)
+                        trash_trajectories.append(env.current_trash_taken)
 
                 o, ep_ret, ep_len = env.reset(), 0, 0
 
@@ -541,6 +544,8 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
         logger.log_tabular('DeltaLossV', average_only=True)
         logger.log_tabular('Entropy', average_only=True)
         logger.log_tabular('KL', average_only=True)
+        logger.log_tabular('Risk', average_only=True)
+        logger.log_tabular('ExpectedRet', average_only=True)
         logger.log_tabular('Time', time.time()-start_time)
         logger.dump_tabular()
         print("Frac Constraint Violations: %d/%d" % (num_constraint_violations, num_episodes))
@@ -565,9 +570,9 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
 
     if args.env == 'PointBot-v0':
         print(trash_trajectories)
-        plt.ylim((-100, 100))
-        plt.xlim((-100, 100))
-        for i in range(5):
+        plt.ylim((-20, 65))
+        plt.xlim((-25, 65))
+        for i in range(1):
             x = trajectories_x[i]
             y = trajectories_y[i]
             plt.scatter(x, y, len(x)*[6], zorder=1)
@@ -582,9 +587,16 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
         
         plt.savefig(file_data + 'visualizations/' + experiment_name + '.png')
         plt.clf()
-        #torch.save(ac.state_dict(), file_data + 'PointBot_networks/' + experiment_name + '.txt')
+        torch.save(ac.state_dict(), file_data + 'PointBot_networks/' + experiment_name + '.pt')
 
     print(' Data from experiment: ', experiment_name, ' saved.')
+    if args.env == 'PointBot-v0':
+        print(np.average(num_trashes[-100:]))
+        print(np.std(num_trashes[-100:]))
+        print(np.average(obs_times[-100:]))
+        print(np.std(obs_times[-100:]))
+
+    print(num_runs)
 
 if __name__ == '__main__':
     import argparse
@@ -612,7 +624,6 @@ if __name__ == '__main__':
     mpi_fork(args.cpu)  # run parallel code with mpi
 
     from spinup.utils.run_utils import setup_logger_kwargs
-
     logger_kwargs = setup_logger_kwargs(args.exp_name, args.seed)
 
     if args.env == 'CartPole-v0':
