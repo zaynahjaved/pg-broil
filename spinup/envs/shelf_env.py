@@ -37,22 +37,22 @@ class ShelfEnv(BaseMujocoEnv):
         self.reset_xml = os.path.join(envs_folder,
                                       'cartgripper_assets/shelf.xml')
         super().__init__(self.reset_xml, parent_params)
-        self._adim = 3
+        self._adim = 4
         self.substeps = 500
         self.low_bound = np.array([-0.4, -0.4, -0.05])
         self.high_bound = np.array([0.4, 0.4, 0.15])
-        self.ac_high = np.array([0.1, 0.1, 0.1])
+        self.ac_high = np.array([0.1, 0.1, 0.1, 0.1])
         self.ac_low = -self.ac_high
         self.action_space = Box(self.ac_low, self.ac_high)
         self._previous_target_qpos = None
         self.target_height_thresh = 0.03
         self.object_fall_thresh = -0.03
-        self.obj_y_dist_range = np.array([0.05, 0.05])
-        self.obj_x_range = np.array([-0.15, -0.15])
+        self.obj_y_dist_range = np.array([0.05, 0.2])
+        self.obj_x_range = np.array([-0.2, -0.05])
         self.randomize_objects = not FIXED_ENV
         self.dense_reward = DENSE_REWARD
         self.gt_state = GT_STATE
-        self._max_episode_steps = 10
+        self._max_episode_steps = 25
 
         if self.gt_state:
             self.observation_space = Box(
@@ -61,8 +61,6 @@ class ShelfEnv(BaseMujocoEnv):
             self.observation_space = (48, 64, 3)
         self.reset()
 
-    def set_reward_type(self, dense_reward):
-        self.dense_reward = dense_reward
 
     def render(self):
         return super().render()[:, ::-1].copy().squeeze(
@@ -92,12 +90,8 @@ class ShelfEnv(BaseMujocoEnv):
             return self.render()
 
     def step(self, action):
-        # print("DATA: ", self.sim.data.ncon)
         position = self.position
         action = np.clip(action, self.ac_low, self.ac_high)
-        action_first = list(action[:2])
-        action_grip = [action[2]]
-        action = np.array(action_first + [0] + action_grip)
         target_qpos = self._next_qpos(action)
         if self._previous_target_qpos is None:
             self._previous_target_qpos = target_qpos
@@ -114,11 +108,15 @@ class ShelfEnv(BaseMujocoEnv):
         reward = self.reward_fn()
 
         if EARLY_TERMINATION:
-            done = reward > 0.5
-            if done: 
-                print("GRASPED!")
+            done = reward > -0.5
         else:
             done = False
+
+        if reward > -0.5:
+            print("GRASPED!")
+
+        # if done and reward > 0:
+        #     reward = 5
 
         info = {
             "constraint": constraint,
@@ -165,54 +163,82 @@ class ShelfEnv(BaseMujocoEnv):
         target_obj_pos = self.object_poses[1][:3]
         action = np.zeros(self._adim)
         delta = target_obj_pos - cur_pos
+        # print(self.jaw_width)
         if np.abs(delta[0]) > 0.03:
             if demo_quality == 'high':
                 action[0] = delta[0]
             else:
                 action[0] = 0.5 * delta[0]
-            action[2] = 0.02
+            action[3] = 0.02
         elif np.abs(delta[1]) > 0.05:
             if demo_quality == 'high':
                 action[1] = delta[1]
             else:
                 action[1] = 0.5 * delta[1]
-            action[2] = 0.02
+            action[3] = 0.02
         elif self.jaw_width > 0.06:
-            action[2] = 0.06
+            action[3] = 0.06
         else:
-            action[2] = 0.06
+            action[3] = 0.06
             if demo_quality == 'high':
-                action[1] = 0.05
+                action[2] = 0.05
             else:
-                action[1] = 0.05
+                action[2] = 0.02
         action = action + np.random.randn(self._adim) * noise_std
         action = np.clip(action, self.ac_low, self.ac_high)
         return action
 
+    def get_demos(self, num_demos):
+        demo_obs = []
+        demo_acs = []
+        env = ShelfEnv()
+
+        i = 0
+        while i < num_demos:
+            print("Demo: ", i)
+            s = env.reset()
+            demo_obs.append([s])
+            demo_acs.append([])
+            success = False
+            for _ in range(self._max_episode_steps):
+                ac = env.expert_action(noise_std=0.02, demo_quality='high')
+                ns, r, done, info = env.step(ac)
+                demo_obs[-1].append(ns)
+                demo_acs[-1].append(ac)
+                if done:
+                    i += 1
+                    success = True
+                    break
+
+            if not success:
+                del demo_obs[-1]
+                del demo_acs[-1]
+
+        return demo_obs, demo_acs
+
     def reward_fn(self):
-        if not self.dense_reward:
-            return -(self.target_object_height <
-                     self.target_height_thresh).astype(float)
-        else:
-            lift_reward = (self.target_object_height > self.target_height_thresh).astype(float)
-            cur_pos = self.position[:2]
-            cur_pos[1] += 0.05 # compensate for length of jaws
-            target_obj_pos = self.object_poses[1][:2]
-            grasp_reward = (abs(target_obj_pos[1] - self.init_x) > 0.02).astype(float)
-            # self.grasp_reward = grasp_reward
-            action = np.zeros(self._adim)
-            delta = target_obj_pos - cur_pos
-            ee_reward = -np.linalg.norm(delta)
-            if ee_reward > -0.03:
-                ee_reward = 0.
-            return grasp_reward# + 0.1 * ee_reward
+        # if not self.dense_reward:
+        return -(self.target_object_height <
+                 self.target_height_thresh).astype(float)
+        # else:
+        #     lift_reward = (self.target_object_height > self.target_height_thresh).astype(float)
+        #     # if lift_reward == 1:
+        #     #     print("lifted")
+        #     cur_pos = self.position[:2]
+        #     cur_pos[1] += 0.05 # compensate for length of jaws
+        #     target_obj_pos = self.object_poses[1][:2]
+        #     action = np.zeros(self._adim)
+        #     delta = target_obj_pos - cur_pos
+        #     ee_reward = -np.linalg.norm(delta)
+        #     if ee_reward > -0.03:
+        #         ee_reward = 0.
+        #     return lift_reward + 0.1 * ee_reward
 
     def object_reset_poses(self):
         new_poses = np.zeros((3, 7))
         new_poses[:, 3] = 1
         if self.randomize_objects == True:
             x = np.random.uniform(self.obj_x_range[0], self.obj_x_range[1])
-            self.init_x = x
             y1 = np.random.randn() * 0.05
             y0 = y1 - np.random.uniform(self.obj_y_dist_range[0],
                                         self.obj_y_dist_range[1])
@@ -249,37 +275,10 @@ class ShelfEnv(BaseMujocoEnv):
         return self.object_poses[1, 2] - 0.072
 
     def _next_qpos(self, action):
+        assert action.shape[0] == self._adim, action
         target = no_rot_dynamics(self._previous_target_qpos, action)
         target = clip_target_qpos(target, self.low_bound, self.high_bound)
         return target
-
-    def get_demos(self, num_demos):
-        demo_obs = []
-        demo_acs = []
-        env = ShelfEnv()
-
-        i = 0
-        while i < num_demos:
-            print("Demo: ", i)
-            s = env.reset()
-            demo_obs.append([s])
-            demo_acs.append([])
-            success = False
-            for _ in range(self._max_episode_steps):
-                ac = env.expert_action(noise_std=0.02, demo_quality='high')
-                ns, r, done, info = env.step(ac)
-                demo_obs[-1].append(ns)
-                demo_acs[-1].append(ac)
-                if done:
-                    i += 1
-                    success = True
-                    break
-
-            if not success:
-                del demo_obs[-1]
-                del demo_acs[-1]
-
-        return demo_obs, demo_acs
 
 def npy_to_gif(im_list, filename, fps=4):
     clip = mpy.ImageSequenceClip(im_list, fps=fps)
@@ -288,25 +287,14 @@ def npy_to_gif(im_list, filename, fps=4):
 
 if __name__ == '__main__':
     env = ShelfEnv()
-    im_list = [env.render().squeeze()]
-    s = env.reset()
-    print("state: ", s[:6])
-    for i in range(25):
-        # ac = env.expert_action(0.1, demo_quality='low')
-        if i < 12:
-            ac = env.expert_action(0.01, demo_quality='high')
-        else:
-            ac = env.expert_action(0.01, demo_quality='high')
-        # ac = env.expert_action(0)
-        # ac[2] = 0
+    im_list = []
+    for _ in range(20):
+        ac = env.expert_action(0.01)
         ns, r, done, info = env.step(ac)
         print(env.topple_check())
         print("reward: ", r)
-        print("state: ", ns[:6])
-        if done:
-            break
-        a = env.render().squeeze()
-        im_list.append(a)
+        # a = env.render().squeeze()
+        # im_list.append(a)
     # plt.imshow(a.squeeze())
     # plt.show()
-    npy_to_gif(im_list, "out")
+    # npy_to_gif(im_list, "out")
