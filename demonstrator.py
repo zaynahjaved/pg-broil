@@ -40,16 +40,17 @@ class LineBuilder:
         self.yt = []
         self.typ = typ
         self.env = env
-        self.steps = 1
-        self.state = env.reset()
+        self.steps = 0
+        self.state = env.state
         self.states = [self.state]
+        self.actions = []
         self.cid = line.figure.canvas.mpl_connect('button_press_event', self)
         self.info = fig.canvas.mpl_connect('key_press_event', self.press)
 
     def press(self, event):
         sys.stdout.flush()
         if event.key == 'v':
-            print("X_v: ", str(self.env.state[1]), " Y_v: ", str(self.env.state[3]))
+            print("X_v: ", str(self.env.state[1]), " Y_v: ", str(self.env.state[3]), " Action: ", str(self.env.curr_action))
         if event.key == 'p':
             print("X: ", str(self.env.state[0]), " Y: ", str(self.env.state[2]))
         if event.key == 'w':
@@ -93,41 +94,42 @@ class LineBuilder:
             x_f = diff_x
             y_f = diff_y
 
-            if abs(diff_x) >= MAX_FORCE and abs(diff_y) >= MAX_FORCE:
-                if diff_x >= 0 and diff_y >= 0:
-                    if diff_x >= diff_y:
-                        x_f = abs(diff_x/diff_x) * MAX_FORCE/10
-                        y_f = abs(diff_y/diff_x) * MAX_FORCE/10
-                    else:
-                        x_f = abs(diff_x/diff_y) * MAX_FORCE/10
-                        y_f = abs(diff_y/diff_y) * MAX_FORCE/10
+            
+            if diff_x >= 0 and diff_y >= 0:
+                if abs(diff_x) >= abs(diff_y):
+                    x_f = abs(diff_x/diff_x) * MAX_FORCE/10
+                    y_f = abs(diff_y/diff_x) * MAX_FORCE/10
+                else:
+                    x_f = abs(diff_x/diff_y) * MAX_FORCE/10
+                    y_f = abs(diff_y/diff_y) * MAX_FORCE/10
 
-                elif diff_x < 0 and diff_y >= 0:
-                    if diff_x >= diff_y:
-                        x_f = -abs(diff_x/diff_x) * MAX_FORCE/10
-                        y_f = abs(diff_y/diff_x) * MAX_FORCE/10
-                    else:
-                        x_f = -abs(diff_x/diff_y) * MAX_FORCE/10
-                        y_f = abs(diff_y/diff_y) * MAX_FORCE/10
+            elif diff_x < 0 and diff_y >= 0:
+                if abs(diff_x) >= abs(diff_y):
+                    x_f = -abs(diff_x/diff_x) * MAX_FORCE/10
+                    y_f = abs(diff_y/diff_x) * MAX_FORCE/10
+                else:
+                    x_f = -abs(diff_x/diff_y) * MAX_FORCE/10
+                    y_f = abs(diff_y/diff_y) * MAX_FORCE/10
 
-                elif diff_x >= 0 and diff_y < 0:
-                    if diff_x >= diff_y:
-                        x_f = abs(diff_x/diff_x) * MAX_FORCE/10
-                        y_f = -abs(diff_y/diff_x) * MAX_FORCE/10
-                    else:
-                        x_f = abs(diff_x/diff_y) * MAX_FORCE/10
-                        y_f = -abs(diff_y/diff_y) * MAX_FORCE/10
+            elif diff_x >= 0 and diff_y < 0:
+                if abs(diff_x) >= abs(diff_y):
+                    x_f = abs(diff_x/diff_x) * MAX_FORCE/10
+                    y_f = -abs(diff_y/diff_x) * MAX_FORCE/10
+                else:
+                    x_f = abs(diff_x/diff_y) * MAX_FORCE/10
+                    y_f = -abs(diff_y/diff_y) * MAX_FORCE/10
 
-                elif diff_x < 0 and diff_y < 0:
-                    if diff_x >= diff_y:
-                        x_f = -abs(diff_x/diff_x) * MAX_FORCE/5
-                        y_f = -abs(diff_y/diff_x) * MAX_FORCE/10
-                    else:
-                        x_f = -abs(diff_x/diff_y) * MAX_FORCE/10
-                        y_f = -abs(diff_y/diff_y) * MAX_FORCE/10
+            elif diff_x < 0 and diff_y < 0:
+                if abs(diff_x) >= abs(diff_y):
+                    x_f = -abs(diff_x/diff_x) * MAX_FORCE/5
+                    y_f = -abs(diff_y/diff_x) * MAX_FORCE/10
+                else:
+                    x_f = -abs(diff_x/diff_y) * MAX_FORCE/10
+                    y_f = -abs(diff_y/diff_y) * MAX_FORCE/10
 
             act = tuple((x_f, y_f))
             new_state, _, _, _ = self.env.step(act)
+            self.actions.append(self.env.curr_action)
 
             if TRASH:
                 plt.scatter([self.env.next_trash[0]],[self.env.next_trash[1]], [20], '#000000')
@@ -158,41 +160,42 @@ class LineBuilder:
         x_f = diff_x
         y_f = diff_y
 
-        if abs(diff_x) >= MAX_FORCE and abs(diff_y) >= MAX_FORCE:
-            if diff_x >= 0 and diff_y >= 0:
-                if diff_x >= diff_y:
-                    x_f = abs(diff_x/diff_x) * MAX_FORCE
-                    y_f = abs(diff_y/diff_x) * MAX_FORCE
-                else:
-                    x_f = abs(diff_x/diff_y) * MAX_FORCE
-                    y_f = abs(diff_y/diff_y) * MAX_FORCE
+        
+        if diff_x >= 0 and diff_y >= 0:
+            if abs(diff_x) >= abs(diff_y):
+                x_f = abs(diff_x/diff_x) * MAX_FORCE
+                y_f = abs(diff_y/diff_x) * MAX_FORCE
+            else:
+                x_f = abs(diff_x/diff_y) * MAX_FORCE
+                y_f = abs(diff_y/diff_y) * MAX_FORCE
 
-            elif diff_x < 0 and diff_y >= 0:
-                if diff_x >= diff_y:
-                    x_f = -abs(diff_x/diff_x) * MAX_FORCE
-                    y_f = abs(diff_y/diff_x) * MAX_FORCE
-                else:
-                    x_f = -abs(diff_x/diff_y) * MAX_FORCE
-                    y_f = abs(diff_y/diff_y) * MAX_FORCE
+        elif diff_x < 0 and diff_y >= 0:
+            if abs(diff_x) >= abs(diff_y):
+                x_f = -abs(diff_x/diff_x) * MAX_FORCE
+                y_f = abs(diff_y/diff_x) * MAX_FORCE
+            else:
+                x_f = -abs(diff_x/diff_y) * MAX_FORCE
+                y_f = abs(diff_y/diff_y) * MAX_FORCE
 
-            elif diff_x >= 0 and diff_y < 0:
-                if diff_x >= diff_y:
-                    x_f = abs(diff_x/diff_x) * MAX_FORCE
-                    y_f = -abs(diff_y/diff_x) * MAX_FORCE
-                else:
-                    x_f = abs(diff_x/diff_y) * MAX_FORCE
-                    y_f = -abs(diff_y/diff_y) * MAX_FORCE
+        elif diff_x >= 0 and diff_y < 0:
+            if abs(diff_x) >= abs(diff_y):
+                x_f = abs(diff_x/diff_x) * MAX_FORCE
+                y_f = -abs(diff_y/diff_x) * MAX_FORCE
+            else:
+                x_f = abs(diff_x/diff_y) * MAX_FORCE
+                y_f = -abs(diff_y/diff_y) * MAX_FORCE
 
-            elif diff_x < 0 and diff_y < 0:
-                if diff_x >= diff_y:
-                    x_f = -abs(diff_x/diff_x) * MAX_FORCE
-                    y_f = -abs(diff_y/diff_x) * MAX_FORCE
-                else:
-                    x_f = -abs(diff_x/diff_y) * MAX_FORCE
-                    y_f = -abs(diff_y/diff_y) * MAX_FORCE
+        elif diff_x < 0 and diff_y < 0:
+            if abs(diff_x) >= abs(diff_y):
+                x_f = -abs(diff_x/diff_x) * MAX_FORCE
+                y_f = -abs(diff_y/diff_x) * MAX_FORCE
+            else:
+                x_f = -abs(diff_x/diff_y) * MAX_FORCE
+                y_f = -abs(diff_y/diff_y) * MAX_FORCE
 
         act = tuple((x_f, y_f))
         new_state, _, _, _ = self.env.step(act)
+        self.actions.append(self.env.curr_action)
 
         if TRASH:
             plt.scatter([self.env.next_trash[0]],[self.env.next_trash[1]], [20], '#000000')
@@ -208,10 +211,11 @@ class LineBuilder:
 
 def init(typ="Good"):
     env = gym.make('PointBot-v0')
+    env.reset()
     fig = plt.figure()
     ax = fig.add_subplot()
     ax.set_title('PointBot Env '+ typ +' Demonstrator')
-    line, = ax.plot([START_POS[0]], START_POS[1])  # empty line
+    line, = ax.plot([env.state[0]], env.state[2])  # empty line
     linebuilder = LineBuilder(line, env, fig, typ)
     num_obst = len(env.obstacle.obs)
     for i in range(num_obst):
@@ -222,7 +226,7 @@ def init(typ="Good"):
     if TRASH:
         plt.scatter([env.next_trash[0]],[env.next_trash[1]], [25], '#000000')
 
-    ax.scatter([START_POS[0]],[START_POS[1]],  [5], '#00FF00')
+    ax.scatter([env.state[0]],[env.state[2]],  [5], '#00FF00')
     if not TRASH:
         ax.scatter([END_POS[0]],[END_POS[1]],  [5], '#FF0000')
 
@@ -233,12 +237,14 @@ def init(typ="Good"):
 
 def end(linebuilder, typ="Good"):
     if TRASH:
-        for _ in range(101-len(linebuilder.states)):
-            next_state = [END_POS[0], 0, END_POS[1], 0] + NOISE_SCALE * np.random.randn(4)
-            next_state = np.concatenate((next_state, linebuilder.env.closest_trash(GOAL_STATE)))
+        feature_length = sum(linebuilder.env.feature)
+        for _ in range(HORIZON-feature_length):
+            next_state = [linebuilder.env.state[0], 0, linebuilder.env.state[2], 0] + NOISE_SCALE * np.random.randn(4)
+            next_state = np.concatenate((next_state, linebuilder.env.closest_trash(linebuilder.env.state)))
             linebuilder.states.append(next_state)
+            linebuilder.actions.append([0, 0])
     else:
-        for _ in range(101-len(linebuilder.states)):
+        for _ in range(HORIZON-feature_length):
             linebuilder.states.append([END_POS[0], 0, END_POS[1], 0] + NOISE_SCALE * np.random.randn(4))
 
     if not os.path.exists('demonstrations'):
@@ -246,16 +252,14 @@ def end(linebuilder, typ="Good"):
     
     try:
         f = open("demonstrations/states_" + str(args.dem_num) + ".txt", "a")
-        assert linebuilder.env.feature[0] + linebuilder.env.feature[1] < HORIZON + 1, "ERROR: Number of states is greater than the HORIZON!"
-        linebuilder.env.feature[1] = HORIZON + 1 - linebuilder.env.feature[0]
-        print(linebuilder.env.feature)
         f.write("\n" + typ)
         f.write("\nFeature: " + str(linebuilder.env.feature))
         f.write("\n\nStates: " + str(linebuilder.states))
+        f.write("\n\nActions: " + str(linebuilder.actions))
         if TRASH:
             f.write("\n\nTrash Locations: "+ str(linebuilder.env.current_trash_taken))
         f.close()
-        return linebuilder.env.feature
+        return linebuilder.env.feature, linebuilder.states, linebuilder.actions
     except AssertionError as msg:  
         print(msg) 
         return None
@@ -269,12 +273,12 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     linebuilder = init()
-    good = end(linebuilder)
+    good_feature, good_states, good_actions = end(linebuilder)
 
     linebuilder = init("Bad")
-    bad = end(linebuilder, "Bad")
+    bad_feature, bad_states, bad_actions = end(linebuilder, "Bad")
 
-    dic = {"Good": good, "Bad": bad}
-    p = open("demonstrations/features_" + str(args.dem_num) + ".pkl", "wb")
+    dic = {"Good_feature": good_feature, "Bad_feature": bad_feature, "Good_states": good_states, "Good_actions": good_actions, "Bad_states": bad_states, "Bad_actions": bad_actions}
+    p = open("demonstrations/features_states_actions_" + str(args.dem_num) + ".pkl", "wb")
     pickle.dump(dic, p)
     p.close()
