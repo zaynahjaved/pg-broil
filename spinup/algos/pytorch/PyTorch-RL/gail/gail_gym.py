@@ -100,6 +100,9 @@ for i in range(len(demo_acs)):
     for j in range(len(obs_batch)):
         expert_traj.append(np.hstack([obs_batch[j], acs_batch[j]]))
 
+expert_traj = np.array(expert_traj)
+print("EXPERT TRAJ: ", expert_traj.shape)
+
 def expert_reward(state, action):
     state_action = tensor(np.hstack([state, action]), dtype=dtype)
     with torch.no_grad():
