@@ -39,7 +39,7 @@ class PointBot(Env, utils.EzPickle):
 
     def __init__(self):
         utils.EzPickle.__init__(self)
-        self.hist = self.rewards = self.done = self.time = self.state = None
+        self.hist = self.rewards = self.done = self.time = self.state = self.obs_time = None
         self.A = np.eye(4)
         self.A[2,3] = self.A[0,1] = 1
         self.A[1,1] = self.A[3,3] = 1 - AIR_RESIST
@@ -117,6 +117,8 @@ class PointBot(Env, utils.EzPickle):
         self.state = next_state
         self.time += 1
         self.hist.append(self.state)
+        if self.obstacle.obs[0].in_obs((self.state[0], self.state[2]), TRASH_BUFFER):
+            self.obs_time += 1
         self.done = HORIZON <= self.time                        # where is collision cost uncertain
         return self.state, -cur_cost+trash_bonus, self.done, {}     # add information, boolean, obstacle = true or false whether collision or not, key to be in collsion
 
@@ -153,6 +155,7 @@ class PointBot(Env, utils.EzPickle):
         else:
             self.state = self.start_state + np.random.randn(4) * NOISE_SCALE
         self.time = 0       #expectiation better to go through obstacle small number (2), worst case better around (50)
+        self.obs_time = 0
         self.rewards = []
         self.done = False
         if TRASH:
