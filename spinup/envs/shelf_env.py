@@ -77,7 +77,7 @@ class ShelfEnv(BaseMujocoEnv):
         pos[6:] = self.object_reset_poses().ravel()
         state.qpos[:] = pos
         self.sim.set_state(state)
-
+        self.t = 0
         self.sim.forward()
 
         self._previous_target_qpos = copy.deepcopy(
@@ -112,8 +112,12 @@ class ShelfEnv(BaseMujocoEnv):
         else:
             done = False
 
+        done = done or self.t == self._max_episode_steps
+
         if reward > -0.5:
             print("GRASPED!")
+
+        self.t += 1
 
         # if done and reward > 0:
         #     reward = 5
