@@ -45,6 +45,7 @@ class PointBot(Env, utils.EzPickle):
         self.A[1,1] = self.A[3,3] = 1 - AIR_RESIST
         self.B = np.array([[0,0], [1,0], [0,0], [0,1]])
         self.horizon = HORIZON
+        self._max_episode_steps = HORIZON
         self.action_space = Box(-np.ones(2) * MAX_FORCE, np.ones(2) * MAX_FORCE)
         if TRASH:
             self.observation_space = Box(-np.ones(6) * np.float('inf'), np.ones(6) * np.float('inf'))
@@ -104,6 +105,24 @@ class PointBot(Env, utils.EzPickle):
                 if self.obstacle.obs[i].in_obs(point, START_BUFFER):
                     proper = False
         return [x, 0, y, 0]
+
+    def get_demos(self, num=10):
+        demo_obs = []
+        demo_acs = []
+        pickle_files = []
+
+        for file_dir in ["demos"]:
+            for filename in os.listdir(file_dir):
+                if filename.endswith(".pkl"):
+                    pickle_files.append(file_dir + "/" + filename)
+
+        for file in pickle_files:
+            with open(file, 'rb') as handle:
+                b = pickle.load(handle)
+                demo_obs += [b["states"]]
+                demo_acs += [b["actions"]]
+
+        return demo_obs, demo_acs
 
     def step(self, a):
         a = process_action(a)
