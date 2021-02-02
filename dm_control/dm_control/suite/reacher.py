@@ -133,4 +133,8 @@ class Reacher(base.Task):
 
   def get_constraint(self, physics):
     radii = physics.named.model.geom_size[['obstacle', 'finger'], 0].sum()
-    return rewards.tolerance(physics.finger_to_obstacle_dist(), (0, radii))
+    return int(rewards.tolerance(physics.finger_to_obstacle_dist(), (0, radii)) > 0)
+
+  def at_target(self, physics):
+    radii = physics.named.model.geom_size[['target', 'finger'], 0].sum()
+    return int(rewards.tolerance(physics.finger_to_target_dist(), (0, radii)) > 0)

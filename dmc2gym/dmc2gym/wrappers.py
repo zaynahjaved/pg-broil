@@ -179,6 +179,14 @@ class DMCWrapper(core.Env):
     def get_reward(self):
         return self.cur_reward
 
+    def get_features(self):
+        '''TODO: only supported for reacher env rn'''
+        target_dist = self._env.physics.finger_to_target_dist()
+        in_obstacle = self._env._task.get_constraint(self._env.physics)
+        in_target = self._env._task.at_target(self._env.physics)
+        in_free_space = int(not in_target and not in_obstacle)
+        return [target_dist, in_obstacle, in_free_space]
+
     def get_constraint(self):
         return self.cur_constraint
 
