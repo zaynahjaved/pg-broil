@@ -128,9 +128,9 @@ class PointBot(Env, utils.EzPickle):
         a = process_action(a)
         self.curr_action = a
         self.trash_taken = False
+        self.augment_feature(self.state)
         next_state = self._next_state(self.state, a)
         trash_bonus = self.determine_trash_bonus(next_state)
-        self.augment_feature(self.state, self.trash_taken)
         cur_cost = self.step_cost(self.state, a) 
         self.rewards.append(-cur_cost + trash_bonus)
         self.state = next_state
@@ -153,16 +153,15 @@ class PointBot(Env, utils.EzPickle):
             return self.bonus
         return 0
 
-    def augment_feature(self, state, trash_taken):
-        if not trash_taken:
-            point = tuple((state[0], state[2]))
-            obs = False
-            for i in range(len(self.obstacle.obs)):
-                if self.obstacle.obs[i].in_obs(point, 0): #point within obstacle region
-                    self.feature[0] += 1
-                    obs = True
-            if not obs:
-                self.feature[1] += 1
+    def augment_feature(self, state):
+        point = tuple((state[0], state[2]))
+        obs = False
+        for i in range(len(self.obstacle.obs)):
+            if self.obstacle.obs[i].in_obs(point, 0): #point within obstacle region
+                self.feature[0] += 1
+                obs = True
+        if not obs:
+            self.feature[1] += 1
 
     def reset(self):
         if TRASH:

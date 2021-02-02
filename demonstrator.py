@@ -270,15 +270,25 @@ if __name__ == '__main__':
     import time
     parser = argparse.ArgumentParser()
     parser.add_argument('--dem_num', type=int, default=1)
+    parser.add_argument('--single', type=bool, default=False)
     args = parser.parse_args()
 
-    linebuilder = init()
-    good_feature, good_states, good_actions = end(linebuilder)
+    if args.single:
+        linebuilder = init("Optimal")
+        feature, states, actions = end(linebuilder, "Optimal")
 
-    linebuilder = init("Bad")
-    bad_feature, bad_states, bad_actions = end(linebuilder, "Bad")
+        dic = {"feature": feature,  "states": states, "actions": actions}
+        p = open("demonstrations/features_states_actions_" + str(args.dem_num) + ".pkl", "wb")
+        pickle.dump(dic, p)
+        p.close()
+    else:
+        linebuilder = init()
+        good_feature, good_states, good_actions = end(linebuilder)
 
-    dic = {"Good_feature": good_feature, "Bad_feature": bad_feature, "Good_states": good_states, "Good_actions": good_actions, "Bad_states": bad_states, "Bad_actions": bad_actions}
-    p = open("demonstrations/features_states_actions_" + str(args.dem_num) + ".pkl", "wb")
-    pickle.dump(dic, p)
-    p.close()
+        linebuilder = init("Bad")
+        bad_feature, bad_states, bad_actions = end(linebuilder, "Bad")
+
+        dic = {"Good_feature": good_feature, "Bad_feature": bad_feature, "Good_states": good_states, "Good_actions": good_actions, "Bad_states": bad_states, "Bad_actions": bad_actions}
+        p = open("demonstrations/features_states_actions_" + str(args.dem_num) + ".pkl", "wb")
+        pickle.dump(dic, p)
+        p.close()
