@@ -6,7 +6,7 @@ import time
 
 
 def collect_samples(pid, queue, env, policy, custom_reward,
-                    mean_action, render, running_state, min_batch_size):
+                    mean_action, render, running_state, min_batch_size, count):
     if pid > 0:
         torch.manual_seed(torch.randint(0, 5000, (1,)) * pid)
         if hasattr(env, 'np_random'):
@@ -38,6 +38,7 @@ def collect_samples(pid, queue, env, policy, custom_reward,
                 else:
                     action = policy.select_action(state_var)[0].numpy()
             action = int(action) if policy.is_disc_action else action.astype(np.float64)
+            count +=1
             next_state, reward, done, _ = env.step(action)
             reward_episode += reward
             if running_state is not None:
@@ -81,8 +82,9 @@ def collect_samples(pid, queue, env, policy, custom_reward,
 
     if queue is not None:
         queue.put([pid, memory, log])
+
     else:
-        return memory, log
+        return memory, log, count
 
 
 def merge_log(log_list):
@@ -112,39 +114,38 @@ class Agent:
         self.running_state = running_state
         self.num_threads = num_threads
 
-    def collect_samples(self, min_batch_size, mean_action=False, render=False):
+    def collect_samples(self, min_batch_size, mean_action=False, render=False, count=0):
         t_start = time.time()
         to_device(torch.device('cpu'), self.policy)
         thread_batch_size = int(math.floor(min_batch_size / self.num_threads))
         queue = multiprocessing.Queue()
         workers = []
 
-        for i in range(self.num_threads-1):
-            worker_args = (i+1, queue, self.env, self.policy, self.custom_reward, mean_action,
+        worker_args = (1, queue, self.env, self.policy, self.custom_reward, mean_action,
                            False, self.running_state, thread_batch_size)
-            workers.append(multiprocessing.Process(target=collect_samples, args=worker_args))
-        for worker in workers:
-            worker.start()
+        #workers.append(multiprocessing.Process(target=collect_samples, args=worker_args))
+        #for worker in workers:
+            #worker.start()
 
-        memory, log = collect_samples(0, None, self.env, self.policy, self.custom_reward, mean_action,
-                                      render, self.running_state, thread_batch_size)
+        memory, log, count = collect_samples(0, None, self.env, self.policy, self.custom_reward, mean_action,
+                                      render, self.running_state, thread_batch_size, count)
 
-        worker_logs = [None] * len(workers)
-        worker_memories = [None] * len(workers)
-        for _ in workers:
-            pid, worker_memory, worker_log = queue.get()
-            worker_memories[pid - 1] = worker_memory
-            worker_logs[pid - 1] = worker_log
-        for worker_memory in worker_memories:
-            memory.append(worker_memory)
+        # worker_logs = [None] * len(workers)
+        # worker_memories = [None] * len(workers)
+        # for _ in workers:
+        #     pid, worker_memory, worker_log = queue.get()
+        #     worker_memories[pid - 1] = worker_memory
+        #     worker_logs[pid - 1] = worker_log
+        # for worker_memory in worker_memories:
+        #     memory.append(worker_memory)
         batch = memory.sample()
-        if self.num_threads > 1:
-            log_list = [log] + worker_logs
-            log = merge_log(log_list)
-        to_device(self.device, self.policy)
+        # if self.num_threads > 1:
+        #     log_list = [log] + worker_logs
+        #     log = merge_log(log_list)
+        # to_device(self.device, self.policy)
         t_end = time.time()
         log['sample_time'] = t_end - t_start
         log['action_mean'] = np.mean(np.vstack(batch.action), axis=0)
         log['action_min'] = np.min(np.vstack(batch.action), axis=0)
         log['action_max'] = np.max(np.vstack(batch.action), axis=0)
-        return batch, log
+        return batch, log, count

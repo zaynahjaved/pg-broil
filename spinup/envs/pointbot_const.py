@@ -3,13 +3,14 @@ from .obstacle import Obstacle, ComplexObstacle
 """
 Constants associated with the PointBot env.
 """
-START_POS = [5, 15]
+#START_POS = [5, 15]
+START_POS = [-170, -130]
 END_POS = [0, 0]
-GOAL_THRESH = 4.
+GOAL_THRESH = 1.
 START_STATE = [START_POS[0], 0, START_POS[1], 0]
 GOAL_STATE = [END_POS[0], 0, END_POS[1], 0]
 
-TRASH = True
+TRASH = False
 TRASH_BONUS = 0
 TRASH_RADIUS = 1.5
 #NUM_TRASH_LOCS = 5
@@ -18,14 +19,14 @@ TRASH_RADIUS = 1.5
 TRASH_BUFFER = 10
 START_BUFFER = 5
 
-MAX_FORCE = 0.5
+MAX_FORCE = 1
 HORIZON = 100
 
-NOISE_SCALE = 0
+NOISE_SCALE = 0.05
 AIR_RESIST = 0.2
 
 COLLISION_COST = 0
-MODE = 10
+MODE = 7
 
 OBSTACLE = {
 	1: ComplexObstacle([[[-1000, -999], [-1000, -999]]]),

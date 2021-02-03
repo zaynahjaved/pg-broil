@@ -1,0 +1,4 @@
+Average Trashes: 0.48
+Average Trashes Stnd Dev: 0.7678541528180988
+Average Obstacle Time: 9.25
+Average Obstacle Time Stnd Dev: 16.556796187668677

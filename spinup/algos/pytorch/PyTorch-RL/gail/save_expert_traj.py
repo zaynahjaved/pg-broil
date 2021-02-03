@@ -59,7 +59,7 @@ def main_loop():
 
             expert_traj.append(np.hstack([state, action]))
             print("JEB: ", np.hstack([state, action]))
-            assert(False)
+            #assert(False)
 
             if args.render:
                 env.render()

@@ -4,7 +4,7 @@ import pickle
 class PointBotRewardBrex():
     # Daniel's Suggested Reward
     def __init__(self):
-        with open('brex_reward_dist.pickle', 'rb') as handle:
+        with open('brex_reward_dist_normalized_3demos.pickle', 'rb') as handle:
             b = pickle.load(handle)
         #print(b)
 

@@ -4,7 +4,7 @@ from utils.math import *
 
 
 class Policy(nn.Module):
-    def __init__(self, state_dim, action_dim, hidden_size=(128, 128), activation='tanh', log_std=0):
+    def __init__(self, state_dim, action_dim, hidden_size=(64, 64), activation='tanh', log_std=0):
         super().__init__()
         self.is_disc_action = False
         if activation == 'tanh':

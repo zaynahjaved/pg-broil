@@ -64,16 +64,16 @@ def visualize_policy(pi, env, num_rollouts, folder):
                 os.makedirs('BC_viz_' + str(folder))
             count += 1
             plt.savefig('BC_viz_' + str(folder)+ '/rollout_' + str(count) + '.png')
-            print(env.current_trash_taken, env.next_trash)
-
             plt.clf()
             obs_times.append(env.feature[0])
             num_trashes.append(env.feature[2])
     if args.env == 'PointBot-v0':
-        print(np.average(num_trashes[-100:]))
-        print(np.std(num_trashes[-100:]))
-        print(np.average(obs_times[-100:]))
-        print(np.std(obs_times[-100:]))
+        f = open('BC_viz_' + str(folder)+ '/rolloutAverages.txt', "w")
+        f.write("Average Trashes: "+ str(np.average(num_trashes[-100:])))
+        f.write("\nAverage Trashes Stnd Dev: "+ str(np.std(num_trashes[-100:])))
+        f.write("\nAverage Obstacle Time: "+ str(np.average(obs_times[-100:])))
+        f.write("\nAverage Obstacle Time Stnd Dev: "+ str(np.std(obs_times[-100:])))
+        f.close()
     # Save gif
     #npy_to_gif(im_list, "vis_" + str(i) + ".gif")
 

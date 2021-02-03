@@ -160,7 +160,7 @@ if __name__=="__main__":
     """
     pickle_files = []
     import os
-    for file_dir in ["demos_5"]:
+    for file_dir in ["five_demos"]:
         for filename in os.listdir(file_dir):
             if filename.endswith(".pkl"):
                 pickle_files.append(file_dir + "/" + filename)

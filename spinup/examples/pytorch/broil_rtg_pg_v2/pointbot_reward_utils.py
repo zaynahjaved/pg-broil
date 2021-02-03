@@ -17,7 +17,6 @@ class PointBotReward():
     # Daniel's Suggested Reward
     def __init__(self):
         self.posterior = np.array([0.4, 0.3, 0.2, .05, .05])
-        #self.penalties = np.array([20, 10, 0, -10, -100])
         self.penalties = np.array([50, 40, 0, -40, -500])
         if TRASH:
             self.penalties = np.array([0, 0, 0, 0, 0])

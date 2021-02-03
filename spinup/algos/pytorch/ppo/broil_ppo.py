@@ -7,22 +7,20 @@ import gym
 import time
 from tqdm import tqdm
 import os, sys
-from pointbot_const import *
-import spinup.algos.pytorch.ppo.core as core
+from json import JSONEncoder
+import json
+import spinup.algos.pytorch.vpg.core as core
 from spinup.utils.logx import EpochLogger
+from spinup.envs.pointbot_const import *
 from spinup.utils.mpi_pytorch import setup_pytorch_for_mpi, sync_params, mpi_avg_grads
 from spinup.utils.mpi_tools import mpi_fork, mpi_avg, proc_id, mpi_statistics_scalar, num_procs
 from spinup.examples.pytorch.broil_rtg_pg_v2.pointbot_reward_utils import PointBotReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.cartpole_reward_utils import CartPoleReward
-from spinup.examples.pytorch.broil_rtg_pg_v2.cheetah_reward_utils import CheetahReward
+# from spinup.examples.pytorch.broil_rtg_pg_v2.cheetah_reward_utils import CheetahReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.reacher_reward_utils import ReacherReward
-from spinup.examples.pytorch.broil_rtg_pg_v2.manipulator_reward_utils import ManipulatorReward
-from spinup.examples.pytorch.broil_rtg_pg_v2.safety_gym_reward_utils import SafetyGymReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.shelf_reward_utils import ShelfReward
-from pointbot_reward_brex import PointBotRewardBrex
-from cvar_utils import cvar_enumerate_pg
+from spinup.examples.pytorch.broil_rtg_pg_v2.cvar_utils import cvar_enumerate_pg
 import dmc2gym
-
 torchify = lambda x: torch.FloatTensor(x).to(torch.device('cpu'))
 
 
@@ -505,12 +503,14 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
                 if args.env == 'PointBot-v0':
                     last_trajectory = np.array(env.hist)
                     obs_times.append(env.obs_time/100)
-                    num_trashes.append(len(env.current_trash_taken))
+                    if TRASH:
+                        num_trashes.append(len(env.current_trash_taken))
                     if epoch == epochs - 1:
                         trajectories_x.append(last_trajectory[:, 0])
                         trajectories_y.append(last_trajectory[:, 2])
-                        env.current_trash_taken.append(env.next_trash)
-                        trash_trajectories.append(env.current_trash_taken)
+                        if TRASH:
+                            env.current_trash_taken.append(env.next_trash)
+                            trash_trajectories.append(env.current_trash_taken)
 
                 o, ep_ret, ep_len = env.reset(), 0, 0
 
@@ -551,7 +551,7 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
         print("Frac Constraint Violations: %d/%d" % (num_constraint_violations, num_episodes))
 
 
-    file_data = 'broil_data_108/'
+    file_data = 'broil_data_109/'
     experiment_name = args.env + '_alpha_' + str(broil_alpha) + '_lambda_' + str(broil_lambda)
 
     metrics = {"conditional value at risk": ('_cvar', cvar_list),
@@ -568,13 +568,36 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
             for item in results:
                 f.write("%s\n" % item)
 
+    class NumpyArrayEncoder(JSONEncoder):
+        def default(self, obj):
+            if isinstance(obj, np.ndarray):
+                return obj.tolist()
+            return JSONEncoder.default(self, obj)
+
     if args.env == 'PointBot-v0':
-        print(trash_trajectories)
-        plt.ylim((-20, 65))
-        plt.xlim((-25, 65))
-        for i in range(1):
+        plt.ylim((env.grid[2], env.grid[3]))
+        plt.xlim((env.grid[0], env.grid[1]))
+        for i in range(4):
             x = trajectories_x[i]
             y = trajectories_y[i]
+            if i == 0 and args.combiner:
+                decodeddict = None
+                if (os.path.exists(file_data + "states_combined.txt")):
+                    f = open(file_data + "states_combined.txt", "r")
+                    decodeddict = json.load(f)
+                    f.close()
+                a, b = str(broil_lambda) + "_x", str(broil_lambda) + "_y"
+                temp = {a: trajectories_x, b: trajectories_y}
+                if (os.path.exists(file_data + "states_combined.txt")):
+                    os.remove(file_data + "states_combined.txt")
+                f = open(file_data + "states_combined.txt", "w")
+                if decodeddict == None:
+                    json.dump(temp, f, cls=NumpyArrayEncoder)
+                else:
+                    decodeddict.update(temp)
+                    json.dump(decodeddict, f, cls=NumpyArrayEncoder)
+                f.close()
+
             plt.scatter([x[0]],[y[0]],  [6], '#00FF00', zorder=11)
             plt.scatter(x[1:], y[1:], len(x)*[6], zorder=9)
             if TRASH:
@@ -616,10 +639,11 @@ if __name__ == '__main__':
     parser.add_argument('--policy_lr', type=float, default=3e-4, help="learning rate for policy")
     parser.add_argument('--value_lr', type=float, default=1e-3)
     parser.add_argument('--risk_metric', type=str, default='cvar', help='choice of risk metric, options are "cvar" or "erm"' )
-    parser.add_argument('--broil_lambda', type=float, default=1, help="blending between cvar and expret")
+    parser.add_argument('--broil_lambda', type=float, default=0.2, help="blending between cvar and expret")
     parser.add_argument('--broil_alpha', type=float, default=0.95, help="risk sensitivity for cvar")
     parser.add_argument('--clone', action="store_true", help="do behavior cloning")
     parser.add_argument('--num_demos', type=int, default=0)
+    parser.add_argument('--combiner', type=bool, default=True)
     args = parser.parse_args()
 
     mpi_fork(args.cpu)  # run parallel code with mpi
@@ -630,7 +654,7 @@ if __name__ == '__main__':
     if args.env == 'CartPole-v0':
         reward_dist = CartPoleReward()
     elif args.env == 'PointBot-v0':
-        reward_dist = PointBotRewardBrex()
+        reward_dist = PointBotReward()
     elif args.env == 'HalfCheetah-v2':
         reward_dist = CheetahReward()
     elif args.env == 'Shelf-v0':

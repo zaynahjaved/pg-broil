@@ -61,7 +61,7 @@ class PointBot(Env, utils.EzPickle):
             xbound = self.obstacle.obs[i].boundsx
             ybound = self.obstacle.obs[i].boundsy
             self.grid = [min(self.grid[0], xbound[0]), max(self.grid[1], xbound[1]), min(self.grid[2], ybound[0]), max(self.grid[3], ybound[1])]
-        self.start_state = self.generate_start()
+        self.start_state = START_STATE
         if self.mode == 1:
             self.start_state = [-100, 0, 0, 0]
         if TRASH:
@@ -119,8 +119,10 @@ class PointBot(Env, utils.EzPickle):
         for file in pickle_files:
             with open(file, 'rb') as handle:
                 b = pickle.load(handle)
-                demo_obs += [b["states"]]
-                demo_acs += [b["actions"]]
+                demo_obs += [b["Good_states"]]
+                demo_acs += [b["Good_actions"]]
+                demo_obs += [b["Bad_states"]]
+                demo_acs += [b["Bad_actions"]]
 
         return demo_obs, demo_acs
 
