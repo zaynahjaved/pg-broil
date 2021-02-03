@@ -498,7 +498,6 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
                     if epoch == epochs - 1:
                         trajectories_x.append(last_trajectory[:, 0])
                         trajectories_y.append(last_trajectory[:, 2])
-                print(env.feature, len(env.remaining_trash), len(env.remaining_trash_locs))
                 o, ep_ret, ep_len = env.reset(), 0, 0
 
         # Save model
