@@ -38,6 +38,17 @@ File saving file directories are defined in lines 466-501
 Alpha, Lambda, pi_lr, and vf_lr parameter arrays are defined in lines 539-546 to run multiple parameters
 I also changed train_pi_iters from 80 to 40 on line 111.
 
+===========================================
+To run evaluation of pretrained policy to get risk and return for plotting pareto frontier
+
+pretrain policy using spinninup then use evaluate_policy.py and give it the save path and the env name and it will run 100 policy evaluations and return the expected return under the posterior the cvar
+
+Note you need to pass in the max horizon for the mdp to initialize the buffer size. max horizon should be the max number of steps possible in the environment.
+
+```
+python spinup/algos/pytorch/evaluation/evaluate_policy.py --save_path /home/dsbrown/code/spinningup/data/installtest/installtest_s0 --env CartPole-v0 --num_rollouts 100 --max_horizon 200
+```
+
 
 
 Welcome to Spinning Up in Deep RL!

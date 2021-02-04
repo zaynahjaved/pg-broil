@@ -347,7 +347,7 @@ if __name__ == '__main__':
     parser.add_argument('--gamma', type=float, default=0.99)
     parser.add_argument('--seed', '-s', type=int, default=0)
     parser.add_argument('--cpu', type=int, default=1)
-    parser.add_argument('--num_rollouts', type=int, default=50, help='how many rollouts eval over')
+    parser.add_argument('--num_rollouts', type=int, default=100, help='how many rollouts eval over')
     parser.add_argument('--max_horizon', type=int, default=200, help='max number of steps per rollout (should be env specific)')
     parser.add_argument('--exp_name', type=str, default='vpg')
     parser.add_argument('--render', type=bool, default=False)
