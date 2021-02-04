@@ -118,7 +118,8 @@ class PPOBuffer:
 def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILActorCritic, ac_kwargs=dict(), render=False, seed=0,
         steps_per_epoch=4000, epochs=50, broil_lambda=0.5, broil_alpha=0.95, gamma=0.99, pi_lr=3e-4,
         vf_lr=1e-3, train_pi_iters =40, train_v_iters=80, lam=0.97, max_ep_len=1000, target_kl = .01,
-        clip_ratio = .2, logger_kwargs=dict(), save_freq=10, clone=False, num_demos=0, train_pi_BC_iters=100):
+        clip_ratio = .2, logger_kwargs=dict(), save_freq=10, clone=False, num_demos=0, train_pi_BC_iters=100,
+        expert_fcounts = None):
     """
     Proximal Policy Optimization (by clipping),
 
@@ -263,7 +264,11 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
         #first find the expected on-policy return for current policy under each reward function in the posterior
         exp_batch_rets = np.mean(batch_rets.numpy(), axis=0)
         posterior_reward_weights = reward_dist.posterior
-
+        
+        if expert_fcounts:
+            reward_weights = reward_dist.get_posterior_weight_matrix()
+            expert_returns = np.dot(reward_weights, expert_fcounts)
+            exp_batch_rets -= expert_returns #baseline with what expert would have gotten under each reward function
 
         #calculate sigma and find either the conditional value at risk or entropic risk measure given the current policy
         if broil_risk_metric == "cvar":
@@ -620,6 +625,7 @@ if __name__ == '__main__':
     parser.add_argument('--broil_alpha', type=float, default=0.95, help="risk sensitivity for cvar")
     parser.add_argument('--clone', action="store_true", help="do behavior cloning")
     parser.add_argument('--num_demos', type=int, default=0)
+    parser.add_argument('--baseline_file', type=str, default='', help="file with feature counts of expert")
     args = parser.parse_args()
 
     mpi_fork(args.cpu)  # run parallel code with mpi
@@ -654,8 +660,22 @@ if __name__ == '__main__':
     else:
         env_fn = lambda : gym.make(args.env)
 
+
+    #check if fcounts to load
+    if args.baseline_file == '':
+        fcount_baseline = None #business as usual
+    else:
+        #need to try and read in the file. I'll assume one line of comma separated feature counts
+        freader = open(args.baseline_file, 'r')
+        line = freader.read().strip()
+        vals = []
+        for val in line.split(','):
+            vals.append(float(val))
+        fcount_baseline = np.array(vals)
+
     ppo(env_fn, reward_dist=reward_dist, broil_risk_metric=args.risk_metric, broil_lambda=args.broil_lambda, broil_alpha=args.broil_alpha,
         actor_critic=core.BROILActorCritic, render=args.render,
         ac_kwargs=dict(hidden_sizes=[args.hid]*args.l), gamma=args.gamma,
         seed=args.seed, steps_per_epoch=args.steps, epochs=args.epochs,
-        pi_lr=args.policy_lr, vf_lr = args.value_lr, logger_kwargs=logger_kwargs, clone=args.clone, num_demos=args.num_demos)
+        pi_lr=args.policy_lr, vf_lr = args.value_lr, logger_kwargs=logger_kwargs, clone=args.clone, num_demos=args.num_demos,
+        expert_fcounts=fcount_baseline)
