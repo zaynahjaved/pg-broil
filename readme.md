@@ -14,6 +14,7 @@ Pass in BROIL arguments using
 
 
 ==================================
+
 To run BROIL PPO:
 In the spinningup/spinup/algos/pytorch/ppo directory:
 
@@ -39,6 +40,7 @@ Alpha, Lambda, pi_lr, and vf_lr parameter arrays are defined in lines 539-546 to
 I also changed train_pi_iters from 80 to 40 on line 111.
 
 ===========================================
+
 To run evaluation of pretrained policy to get risk and return for plotting pareto frontier
 
 pretrain policy using spinninup then use evaluate_policy.py and give it the save path and the env name and it will run 100 policy evaluations and return the expected return under the posterior the cvar
