@@ -7,20 +7,20 @@ import gym
 import time
 from tqdm import tqdm
 import os, sys
-from pointbot_const import *
+from spinup.envs.pointbot_const import *
 import spinup.algos.pytorch.ppo.core as core
 from spinup.utils.logx import EpochLogger
 from spinup.utils.mpi_pytorch import setup_pytorch_for_mpi, sync_params, mpi_avg_grads
 from spinup.utils.mpi_tools import mpi_fork, mpi_avg, proc_id, mpi_statistics_scalar, num_procs
 from spinup.examples.pytorch.broil_rtg_pg_v2.pointbot_reward_utils import PointBotReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.cartpole_reward_utils import CartPoleReward
-from spinup.examples.pytorch.broil_rtg_pg_v2.cheetah_reward_utils import CheetahReward
-from spinup.examples.pytorch.broil_rtg_pg_v2.reacher_reward_utils import ReacherReward
+#from spinup.examples.pytorch.broil_rtg_pg_v2.cheetah_reward_utils import CheetahReward
+from spinup.examples.pytorch.broil_rtg_pg_v2.reacher_reward_brex import ReacherRewardBrex
 from spinup.examples.pytorch.broil_rtg_pg_v2.manipulator_reward_utils import ManipulatorReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.safety_gym_reward_utils import SafetyGymReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.shelf_reward_utils import ShelfReward
-from pointbot_reward_brex import PointBotRewardBrex
-from cvar_utils import cvar_enumerate_pg
+from spinup.examples.pytorch.broil_rtg_pg_v2.pointbot_reward_brex import PointBotRewardBrex
+from spinup.examples.pytorch.broil_rtg_pg_v2.cvar_utils import cvar_enumerate_pg
 import dmc2gym
 
 torchify = lambda x: torch.FloatTensor(x).to(torch.device('cpu'))
@@ -265,7 +265,7 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
         exp_batch_rets = np.mean(batch_rets.numpy(), axis=0)
         posterior_reward_weights = reward_dist.posterior
         
-        if expert_fcounts:
+        if expert_fcounts is not None:
             reward_weights = reward_dist.get_posterior_weight_matrix()
             expert_returns = np.dot(reward_weights, expert_fcounts)
             exp_batch_rets -= expert_returns #baseline with what expert would have gotten under each reward function
@@ -642,7 +642,7 @@ if __name__ == '__main__':
     elif args.env == 'Shelf-v0':
         reward_dist = ShelfReward()
     elif args.env == 'reacher':
-        reward_dist = ReacherReward()
+        reward_dist = ReacherRewardBrex()
     elif args.env == 'manipulator':
         reward_dist = ManipulatorReward()
     elif 'Safexp' in args.env:
@@ -654,7 +654,7 @@ if __name__ == '__main__':
         import safety_gym
 
     if args.env == 'reacher':
-        env_fn = lambda: dmc2gym.make(domain_name='reacher', task_name='hard', seed=args.seed)
+        env_fn = lambda: dmc2gym.make(domain_name='reacher', task_name='easy', seed=args.seed, episode_length=200)
     elif args.env == 'manipulator':
         env_fn = lambda: dmc2gym.make(domain_name='manipulator', task_name='bring_ball', seed=args.seed)
     else:
