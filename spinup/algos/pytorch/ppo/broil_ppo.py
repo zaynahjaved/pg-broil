@@ -7,20 +7,23 @@ import gym
 import time
 from tqdm import tqdm
 import os, sys
-from pointbot_const import *
+from json import JSONEncoder
+import json
+from spinup.envs.pointbot_const import *
+from spinup.algos.pytorch.ppo.visualize_pointbot import *
 import spinup.algos.pytorch.ppo.core as core
 from spinup.utils.logx import EpochLogger
 from spinup.utils.mpi_pytorch import setup_pytorch_for_mpi, sync_params, mpi_avg_grads
 from spinup.utils.mpi_tools import mpi_fork, mpi_avg, proc_id, mpi_statistics_scalar, num_procs
 from spinup.examples.pytorch.broil_rtg_pg_v2.pointbot_reward_utils import PointBotReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.cartpole_reward_utils import CartPoleReward
-from spinup.examples.pytorch.broil_rtg_pg_v2.cheetah_reward_utils import CheetahReward
-from spinup.examples.pytorch.broil_rtg_pg_v2.reacher_reward_utils import ReacherReward
+#from spinup.examples.pytorch.broil_rtg_pg_v2.cheetah_reward_utils import CheetahReward
+from spinup.examples.pytorch.broil_rtg_pg_v2.reacher_reward_brex import ReacherRewardBrex
 from spinup.examples.pytorch.broil_rtg_pg_v2.manipulator_reward_utils import ManipulatorReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.safety_gym_reward_utils import SafetyGymReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.shelf_reward_utils import ShelfReward
-from pointbot_reward_brex import PointBotRewardBrex
-from cvar_utils import cvar_enumerate_pg
+from spinup.examples.pytorch.broil_rtg_pg_v2.pointbot_reward_brex import PointBotRewardBrex
+from spinup.examples.pytorch.broil_rtg_pg_v2.cvar_utils import cvar_enumerate_pg
 import dmc2gym
 
 torchify = lambda x: torch.FloatTensor(x).to(torch.device('cpu'))
@@ -118,7 +121,8 @@ class PPOBuffer:
 def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILActorCritic, ac_kwargs=dict(), render=False, seed=0,
         steps_per_epoch=4000, epochs=50, broil_lambda=0.5, broil_alpha=0.95, gamma=0.99, pi_lr=3e-4,
         vf_lr=1e-3, train_pi_iters =40, train_v_iters=80, lam=0.97, max_ep_len=1000, target_kl = .01,
-        clip_ratio = .2, logger_kwargs=dict(), save_freq=10, clone=False, num_demos=0, train_pi_BC_iters=100):
+        clip_ratio = .2, logger_kwargs=dict(), save_freq=10, clone=False, num_demos=0, train_pi_BC_iters=100,
+        expert_fcounts = None):
     """
     Proximal Policy Optimization (by clipping),
 
@@ -263,7 +267,11 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
         #first find the expected on-policy return for current policy under each reward function in the posterior
         exp_batch_rets = np.mean(batch_rets.numpy(), axis=0)
         posterior_reward_weights = reward_dist.posterior
-
+        
+        if expert_fcounts is not None:
+            reward_weights = reward_dist.get_posterior_weight_matrix()
+            expert_returns = np.dot(reward_weights, expert_fcounts)
+            exp_batch_rets -= expert_returns #baseline with what expert would have gotten under each reward function
 
         #calculate sigma and find either the conditional value at risk or entropic risk measure given the current policy
         if broil_risk_metric == "cvar":
@@ -505,12 +513,14 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
                 if args.env == 'PointBot-v0':
                     last_trajectory = np.array(env.hist)
                     obs_times.append(env.obs_time/100)
-                    num_trashes.append(len(env.current_trash_taken))
+                    if TRASH:
+                        num_trashes.append(len(env.current_trash_taken))
                     if epoch == epochs - 1:
                         trajectories_x.append(last_trajectory[:, 0])
                         trajectories_y.append(last_trajectory[:, 2])
-                        env.current_trash_taken.append(env.next_trash)
-                        trash_trajectories.append(env.current_trash_taken)
+                        if TRASH:
+                            env.current_trash_taken.append(env.next_trash)
+                            trash_trajectories.append(env.current_trash_taken)
 
                 o, ep_ret, ep_len = env.reset(), 0, 0
 
@@ -551,7 +561,7 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
         print("Frac Constraint Violations: %d/%d" % (num_constraint_violations, num_episodes))
 
 
-    file_data = 'broil_data_108/'
+    file_data = 'broil_data_120/'
     experiment_name = args.env + '_alpha_' + str(broil_alpha) + '_lambda_' + str(broil_lambda)
 
     metrics = {"conditional value at risk": ('_cvar', cvar_list),
@@ -568,13 +578,36 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
             for item in results:
                 f.write("%s\n" % item)
 
+    class NumpyArrayEncoder(JSONEncoder):
+        def default(self, obj):
+            if isinstance(obj, np.ndarray):
+                return obj.tolist()
+            return JSONEncoder.default(self, obj)
+    
     if args.env == 'PointBot-v0':
-        print(trash_trajectories)
-        plt.ylim((-20, 65))
-        plt.xlim((-25, 65))
-        for i in range(1):
+        plt.ylim((env.grid[2], env.grid[3]))
+        plt.xlim((env.grid[0], env.grid[1]))
+        for i in range(4):
             x = trajectories_x[i]
             y = trajectories_y[i]
+            if i == 0 and args.combiner:
+                decodeddict = None
+                if (os.path.exists(file_data + "states_combined.txt")):
+                    f = open(file_data + "states_combined.txt", "r")
+                    decodeddict = json.load(f)
+                    f.close()
+                a, b = str(broil_lambda) + "_x", str(broil_lambda) + "_y"
+                temp = {a: trajectories_x, b: trajectories_y}
+                if (os.path.exists(file_data + "states_combined.txt")):
+                    os.remove(file_data + "states_combined.txt")
+                f = open(file_data + "states_combined.txt", "w")
+                if decodeddict == None:
+                    json.dump(temp, f, cls=NumpyArrayEncoder)
+                else:
+                    decodeddict.update(temp)
+                    json.dump(decodeddict, f, cls=NumpyArrayEncoder)
+                f.close()
+
             plt.scatter([x[0]],[y[0]],  [6], '#00FF00', zorder=11)
             plt.scatter(x[1:], y[1:], len(x)*[6], zorder=9)
             if TRASH:
@@ -589,15 +622,12 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
         plt.savefig(file_data + 'visualizations/' + experiment_name + '.png')
         plt.clf()
         torch.save(ac.state_dict(), file_data + 'PointBot_networks/' + experiment_name + '.pt')
+        env = gym.make(args.env)
+        visualize_policy(env, args.num_rollouts, ac, num_rew_fns, std_r, mean_r, reward_dist, local_steps_per_epoch, broil_alpha, file_data, args, max_ep_len, t, broil_lambda)
+  
+    
 
     print(' Data from experiment: ', experiment_name, ' saved.')
-    if args.env == 'PointBot-v0':
-        print(np.average(num_trashes[-100:]))
-        print(np.std(num_trashes[-100:]))
-        print(np.average(obs_times[-100:]))
-        print(np.std(obs_times[-100:]))
-
-    print(num_runs)
 
 if __name__ == '__main__':
     import argparse
@@ -620,6 +650,9 @@ if __name__ == '__main__':
     parser.add_argument('--broil_alpha', type=float, default=0.95, help="risk sensitivity for cvar")
     parser.add_argument('--clone', action="store_true", help="do behavior cloning")
     parser.add_argument('--num_demos', type=int, default=0)
+    parser.add_argument('--baseline_file', type=str, default='', help="file with feature counts of expert")
+    parser.add_argument('--combiner', type=bool, default=False)
+    parser.add_argument('--num_rollouts', type=int, default=0)
     args = parser.parse_args()
 
     mpi_fork(args.cpu)  # run parallel code with mpi
@@ -630,13 +663,13 @@ if __name__ == '__main__':
     if args.env == 'CartPole-v0':
         reward_dist = CartPoleReward()
     elif args.env == 'PointBot-v0':
-        reward_dist = PointBotRewardBrex()
+        reward_dist = PointBotReward()
     elif args.env == 'HalfCheetah-v2':
         reward_dist = CheetahReward()
     elif args.env == 'Shelf-v0':
         reward_dist = ShelfReward()
     elif args.env == 'reacher':
-        reward_dist = ReacherReward()
+        reward_dist = ReacherRewardBrex()
     elif args.env == 'manipulator':
         reward_dist = ManipulatorReward()
     elif 'Safexp' in args.env:
@@ -648,14 +681,28 @@ if __name__ == '__main__':
         import safety_gym
 
     if args.env == 'reacher':
-        env_fn = lambda: dmc2gym.make(domain_name='reacher', task_name='hard', seed=args.seed)
+        env_fn = lambda: dmc2gym.make(domain_name='reacher', task_name='easy', seed=args.seed, episode_length=200)
     elif args.env == 'manipulator':
         env_fn = lambda: dmc2gym.make(domain_name='manipulator', task_name='bring_ball', seed=args.seed)
     else:
         env_fn = lambda : gym.make(args.env)
 
+
+    #check if fcounts to load
+    if args.baseline_file == '':
+        fcount_baseline = None #business as usual
+    else:
+        #need to try and read in the file. I'll assume one line of comma separated feature counts
+        freader = open(args.baseline_file, 'r')
+        line = freader.read().strip()
+        vals = []
+        for val in line.split(','):
+            vals.append(float(val))
+        fcount_baseline = np.array(vals)
+
     ppo(env_fn, reward_dist=reward_dist, broil_risk_metric=args.risk_metric, broil_lambda=args.broil_lambda, broil_alpha=args.broil_alpha,
         actor_critic=core.BROILActorCritic, render=args.render,
         ac_kwargs=dict(hidden_sizes=[args.hid]*args.l), gamma=args.gamma,
         seed=args.seed, steps_per_epoch=args.steps, epochs=args.epochs,
-        pi_lr=args.policy_lr, vf_lr = args.value_lr, logger_kwargs=logger_kwargs, clone=args.clone, num_demos=args.num_demos)
+        pi_lr=args.policy_lr, vf_lr = args.value_lr, logger_kwargs=logger_kwargs, clone=args.clone, num_demos=args.num_demos,
+        expert_fcounts=fcount_baseline)
