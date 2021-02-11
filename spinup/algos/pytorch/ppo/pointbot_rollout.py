@@ -220,14 +220,9 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
 
     # Create BROIL actor-critic module
     num_rew_fns = reward_dist.posterior.size
-
-    checkpoint = torch.load("PointBot-v0_grid_alpha_0.95_lambda_0.2_vflr_0.001_pilr_0.0003_2021_01_15.txt")
-    ac = checkpoint['model']
-    ac.load_state_dict(checkpoint['state_dict'])
-    for parameter in ac.parameters():
-        parameter.requires_grad = False
-
-    ac.eval()
+    ac = actor_critic(env.observation_space, env.action_space, num_rew_fns, **ac_kwargs)
+    ac.load_state_dict(torch.load('broil_data_109/PointBot_networks/PointBot-v0_alpha_0.95_lambda_0.0.pt'))
+    #max_ep_len = env._max_episode_steps
 
     # Count variables
     var_counts = tuple(core.count_vars(module) for module in [ac.pi, ac.v])
@@ -266,9 +261,9 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
     trash_trajectories = []
     num_trashes = []
     obs_times = []
-
+    
     # Main loop: collect experience in env and update/log each epoch
-    for epoch in tqdm(range(rollouts)):
+    for epoch in tqdm(range(epochs)):
         first_rollout = True
         running_cvar = []
         total_reward_dist = np.zeros(num_rew_fns)
@@ -478,7 +473,6 @@ if __name__ == '__main__':
     parser.add_argument('--clone', action="store_true", help="do behavior cloning")
     parser.add_argument('--num_demos', type=int, default=0)
     parser.add_argument('--combiner', type=bool, default=True)
-    parser.add_argument('--rollouts', type=bool, default=True)
     args = parser.parse_args()
 
     mpi_fork(args.cpu)  # run parallel code with mpi
@@ -492,7 +486,6 @@ if __name__ == '__main__':
         reward_dist = PointBotReward()
     else:
         raise NotImplementedError("Unsupported Environment")
-
     if args.env == 'reacher':
         env_fn = lambda: dmc2gym.make(domain_name='reacher', task_name='hard', seed=args.seed)
     elif args.env == 'manipulator':

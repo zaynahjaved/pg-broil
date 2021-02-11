@@ -121,8 +121,8 @@ class PointBot(Env, utils.EzPickle):
                 b = pickle.load(handle)
                 demo_obs += [b["Good_states"]]
                 demo_acs += [b["Good_actions"]]
-                demo_obs += [b["Bad_states"]]
-                demo_acs += [b["Bad_actions"]]
+                #demo_obs += [b["Bad_states"]]
+                #demo_acs += [b["Bad_actions"]]
 
         return demo_obs, demo_acs
 
@@ -173,7 +173,7 @@ class PointBot(Env, utils.EzPickle):
             self.next_trash = self.generate_trash()
             self.state = np.concatenate((without_heading, self.closest_trash(without_heading)))
         else:
-            self.state = self.start_state + np.random.randn(4) * NOISE_SCALE
+            self.state = self.start_state + np.random.randn(4)
         self.time = 0       #expectiation better to go through obstacle small number (2), worst case better around (50)
         self.obs_time = 0
         self.rewards = []
@@ -197,7 +197,10 @@ class PointBot(Env, utils.EzPickle):
     def step_cost(self, s, a):
         if TRASH:
             s = s[:4]
-            return -np.dot(np.array(self.feature), np.array([-1, 0, 5]))
+            return -np.dot(np.array(self.feature), np.array([0, 0.005, 0.999]))
+            #[-0.11598026, 0.07099031, 0.99071134] MLE seed 4
+            #[-0.0949333,  0.10162025, 0.99028329] MLE seed 0
+            # [-0.08726664, 0.10248095, 0.99089969] MLE seed 1
         else:
             return np.linalg.norm(np.subtract(GOAL_STATE, s)) + self.collision_cost(s)
 

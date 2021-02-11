@@ -16,11 +16,13 @@ class PointBotReward():
 
     # Daniel's Suggested Reward
     def __init__(self):
+        #self.posterior = np.array([0.4, 0.3, 0.2, .04, .06])
+        #self.penalties = np.array([50, 40, 0, -40, -400])
         self.posterior = np.array([0.4, 0.3, 0.2, .05, .05])
         self.penalties = np.array([50, 40, 0, -40, -500])
         if TRASH:
             self.penalties = np.array([0, 0, 0, 0, 0])
-        # Note: expected value of penalty is .55. So, it actually skews us to go towards obstacles
+        # Note: expected value of penalty is 6.4. So, it actually skews us to go towards obstacles
         # The idea is to train BROIL in such a way that it avoids things in the worst case...meaning it'll learn to avoid obstacles
         # despite this. Normal PPO (w/o BROIL) hopefully can't accomplish this as well.
 

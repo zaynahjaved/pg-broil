@@ -10,6 +10,7 @@ import os, sys
 from json import JSONEncoder
 import json
 import spinup.algos.pytorch.vpg.core as core
+from spinup.algos.pytorch.ppo.visualize_pointbot import *
 from spinup.utils.logx import EpochLogger
 from spinup.envs.pointbot_const import *
 from spinup.utils.mpi_pytorch import setup_pytorch_for_mpi, sync_params, mpi_avg_grads
@@ -312,6 +313,7 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
     # Set up function for computing PPO policy loss
     def compute_loss_pi(data):
         obs, act, adv, logp_old, batch_returns = data['obs'], data['act'], data['adv'], data['logp'], data['p_returns']
+
         # Use advantage estimates to compute BROIL policy gradient weights
         broil_weights, cvar = compute_broil_weights(batch_returns, adv)
         weights = torch.as_tensor(broil_weights, dtype=torch.float32)
@@ -530,8 +532,7 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
         """print('True returns:', ret_list)
         print('Cvar: ', cvar_list)
         print('Worst case:', wc_ret_list)"""
-
-
+        
         # Log info about epoch
         logger.log_tabular('Epoch', epoch)
         logger.log_tabular('EpRet', with_min_and_max=True)
@@ -551,7 +552,7 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
         print("Frac Constraint Violations: %d/%d" % (num_constraint_violations, num_episodes))
 
 
-    file_data = 'broil_data_109/'
+    file_data = 'broil_data_120/'
     experiment_name = args.env + '_alpha_' + str(broil_alpha) + '_lambda_' + str(broil_lambda)
 
     metrics = {"conditional value at risk": ('_cvar', cvar_list),
@@ -573,7 +574,7 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
             if isinstance(obj, np.ndarray):
                 return obj.tolist()
             return JSONEncoder.default(self, obj)
-
+    
     if args.env == 'PointBot-v0':
         plt.ylim((env.grid[2], env.grid[3]))
         plt.xlim((env.grid[0], env.grid[1]))
@@ -614,11 +615,13 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
         torch.save(ac.state_dict(), file_data + 'PointBot_networks/' + experiment_name + '.pt')
 
     print(' Data from experiment: ', experiment_name, ' saved.')
-    if args.env == 'PointBot-v0':
-        print(np.average(num_trashes[-100:]))
-        print(np.std(num_trashes[-100:]))
-        print(np.average(obs_times[-100:]))
-        print(np.std(obs_times[-100:]))
+    env = gym.make(args.env)
+    visualize_policy(env, args.num_rollouts, ac, num_rew_fns, std_r, mean_r, reward_dist, local_steps_per_epoch, broil_alpha, file_data, args, max_ep_len, t, broil_lambda)
+    # if args.env == 'PointBot-v0'and TRASH:
+    #     print(np.average(num_trashes[-100:]))
+    #     print(np.std(num_trashes[-100:]))
+    #     print(np.average(obs_times[-100:]))
+    #     print(np.std(obs_times[-100:]))
 
     print(num_runs)
 
@@ -639,11 +642,12 @@ if __name__ == '__main__':
     parser.add_argument('--policy_lr', type=float, default=3e-4, help="learning rate for policy")
     parser.add_argument('--value_lr', type=float, default=1e-3)
     parser.add_argument('--risk_metric', type=str, default='cvar', help='choice of risk metric, options are "cvar" or "erm"' )
-    parser.add_argument('--broil_lambda', type=float, default=0.2, help="blending between cvar and expret")
+    parser.add_argument('--broil_lambda', type=float, default=1, help="blending between cvar and expret")
     parser.add_argument('--broil_alpha', type=float, default=0.95, help="risk sensitivity for cvar")
     parser.add_argument('--clone', action="store_true", help="do behavior cloning")
     parser.add_argument('--num_demos', type=int, default=0)
     parser.add_argument('--combiner', type=bool, default=True)
+    parser.add_argument('--num_rollouts', type=int, default=100)
     args = parser.parse_args()
 
     mpi_fork(args.cpu)  # run parallel code with mpi
