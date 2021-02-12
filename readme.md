@@ -45,7 +45,7 @@ Make sure to create the right folders (line 41) and metric (line 15: 'cvar', 'ex
 
 ===========================================
 
-To run evaluation of pretrained policy to get risk and return for plotting pareto frontier
+To run evaluation of pretrained policy to get risk and return for plotting pareto frontier:
 
 Pretrain a policy using spinningup then use evaluate_policy.py and give it the save path and the env name and it will run 100 policy evaluations and return the expected return under the posterior the cvar
 
@@ -68,6 +68,8 @@ python spinup/algos/pytorch/rex/brex/brex_basic.py --features_dir demonstrations
 ```
 
 This will also print out the mean and MAP reward. To run a PBRL baseline on , take the outputted MAP and put it into the spinup/examples/pytorch/broil_rtg_pg_v2/reacher_reward_utils.py or spinup/examples/pytorch/broil_rtg_pg_v2/pointbot_reward_utils.py (depending on the environment you want to run) and set the self.posterior to an array containing just 1.
+
+===========================================
 
 For the Pointbot Navigation environment:
 Change the reward function posterior by going to spinningup/spinup/examples/pytorch/broil_rtg_pg_v2/pointbot_reward_utils.py and changing the self.penalties and self.posterior attributes. The default attributes are the ones used for the paper.
