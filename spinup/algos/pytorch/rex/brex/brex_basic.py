@@ -150,14 +150,8 @@ if __name__=="__main__":
     args = parser.parse_args()
 
     ##NN files within PointBot_Networks to load into B-REX
-    """
-    model_files = ['PointBotGrid_alpha_0.92_lambda_0.12_vflr_0.01_pilr_0.01_2020_12_08.txt',
-                'PointBotGrid_alpha_0.95_lambda_0_vflr_0.01_pilr_0.01_2020_12_07.txt',
-                'PointBotGrid_alpha_0.95_lambda_0_vflr_0.01_pilr_0.001_2020_12_07.txt',
-                'PointBotGrid_alpha_0.95_lambda_0.04_vflr_0.01_pilr_0.01_2020_12_07.txt',
-                'PointBotGrid_alpha_0.95_lambda_0.2_vflr_0.001_pilr_0.001_2020_12_08.txt',
-                'PointBotGrid_alpha_0_lambda_1_vflr_0.0001_pilr_0.01_2020_12_12.txt']
-    """
+    #model_files = []
+    
     pickle_files = []
     import os
     for file_dir in ["demos_5"]:
@@ -257,42 +251,25 @@ if __name__=="__main__":
         print(w)
 
 
-    """
     #Start saving reward distribution
-    sampling_rate = 400
-    sampling_chain = chain[100:]
-    bounds = ((-90, 0), (-90, 60), (0, 90))
-    box_size = 30
-
-    num_x_tallies = int ((bounds[0][1] - bounds[0][0]) / float(box_size))
-    num_y_tallies = int ((bounds[1][1] - bounds[1][0]) / float(box_size))
-    num_z_tallies = int ((bounds[2][1] - bounds[2][0]) / float(box_size))
-
-    tally = np.zeros((num_x_tallies, num_y_tallies, num_z_tallies))
-    for i in range(sampling_chain.shape[0]):
-        w = sampling_chain[i]
-
-        x = abs((w[0] - bounds[0][0]) // box_size)
-        y = abs((w[1] - bounds[1][0]) // box_size)
-        z = abs((w[2] - bounds[2][0]) // box_size)
-
-        if (y == 6):
-            print('y:' + str(y))
-        if (i%sampling_rate == 0) and (0 <= x < tally.shape[0]) and (0 <= y < tally.shape[1]) and (0 <= z < tally.shape[2]):
-            tally[int(x), int(y), int(z)] += 1
-    print(tally.shape[0])
-    print(tally.shape[1])
-    print(tally.shape[2])
-    print(tally)
-    tally = tally / float(np.sum(tally))
+    sampling_rate = 1000
+    sampling_chain = chain[500:]
+    
     weight_to_prob = {}
+    brex_subsample_distr = [0, 0, 0]
+    for i in range(sampling_chain.shape[0]):
+        if (i%sampling_rate == 0):
+            weight_to_prob[(sampling_chain[i][0], sampling_chain[i][1], sampling_chain[i][2])] = 1
+            brex_subsample_distr[0] = brex_subsample_distr[0] + sampling_chain[i][0]
+            brex_subsample_distr[1] = brex_subsample_distr[1] + sampling_chain[i][1]
+            brex_subsample_distr[2] = brex_subsample_distr[2] + sampling_chain[i][2]
 
+    for key in weight_to_prob:
+        weight_to_prob[key] = 1/(len(weight_to_prob))
 
-    for i in range(tally.shape[0]):
-        for j in range(tally.shape[1]):
-            for k in range(tally.shape[2]):
-                if tally[i, j, k] > 0:
-                    weight_to_prob[(bounds[0][0]+i * box_size + (box_size/2.0), bounds[1][0]+j * box_size + (box_size/2.0), bounds[2][0]+k * box_size + (box_size/2.0))] = tally[i, j, k]
+    brex_subsample_distr[0] = brex_subsample_distr[0]/(len(weight_to_prob))
+    brex_subsample_distr[1] = brex_subsample_distr[1]/(len(weight_to_prob))
+    brex_subsample_distr[2] = brex_subsample_distr[2]/(len(weight_to_prob))
 
     print('WEIGHTS TO PROBABILITY')
     print(weight_to_prob)
@@ -300,7 +277,6 @@ if __name__=="__main__":
     with open('brex_reward_dist_unnormalized.pickle', 'wb') as handle:
         pickle.dump(weight_to_prob , handle, protocol=pickle.HIGHEST_PROTOCOL)
     #End saving reward distribution
-    """
 
 
     import matplotlib.pyplot as plt
