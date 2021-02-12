@@ -15,14 +15,15 @@ import spinup.algos.pytorch.ppo.core as core
 from spinup.utils.logx import EpochLogger
 from spinup.utils.mpi_pytorch import setup_pytorch_for_mpi, sync_params, mpi_avg_grads
 from spinup.utils.mpi_tools import mpi_fork, mpi_avg, proc_id, mpi_statistics_scalar, num_procs
+
 from spinup.examples.pytorch.broil_rtg_pg_v2.pointbot_reward_utils import PointBotReward
-from spinup.examples.pytorch.broil_rtg_pg_v2.cartpole_reward_utils import CartPoleReward
-#from spinup.examples.pytorch.broil_rtg_pg_v2.cheetah_reward_utils import CheetahReward
+from spinup.examples.pytorch.broil_rtg_pg_v2.pointbot_reward_brex import PointBotRewardBrex
 from spinup.examples.pytorch.broil_rtg_pg_v2.reacher_reward_brex import ReacherRewardBrex
+from spinup.examples.pytorch.broil_rtg_pg_v2.cartpole_reward_utils import CartPoleReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.manipulator_reward_utils import ManipulatorReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.safety_gym_reward_utils import SafetyGymReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.shelf_reward_utils import ShelfReward
-from spinup.examples.pytorch.broil_rtg_pg_v2.pointbot_reward_brex import PointBotRewardBrex
+
 from spinup.examples.pytorch.broil_rtg_pg_v2.cvar_utils import cvar_enumerate_pg
 import dmc2gym
 
@@ -203,8 +204,6 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
             rew_dist = reward_dist.get_reward_distribution(next_o)
         elif args.env == 'PointBot-v0':
             rew_dist = reward_dist.get_reward_distribution(env, next_o)
-        elif args.env == 'HalfCheetah-v2':
-            rew_dist = reward_dist.get_reward_distribution(env, next_o, action)
         elif args.env == 'Shelf-v0':
             rew_dist = reward_dist.get_reward_distribution(env)
         elif args.env == 'reacher':
@@ -356,28 +355,23 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
     #     obs, ret = data['obs'], data['ret'][:,i]
     #     return ((ac.v(obs) - ret)**2).mean()
 
-    #TODO not sure if this is correct, need to inspect...
     # Set up function for computing value loss
     def compute_loss_v(data):
         obs, ret = data['obs'], data['ret']
-        # TODO: Test normalizing the value targets
         new_mean_r = torch.mean(ret, dim=0)
         new_std_r = torch.std(ret, dim=0)
+        
         ret = (ret - new_mean_r) / new_std_r
         mse = (ac.v(obs) - ret)**2
 
-        mean_r[:] = new_mean_r  # IN PLACE MODIFICATION! Don't change
+        mean_r[:] = new_mean_r
         std_r[:] = new_std_r
-        # print(mse.mean(dim=0))
-        # print('')
         return (mse).mean()
 
 
     # Set up optimizers for policy and value function
     pi_optimizer = Adam(ac.pi.parameters(), lr=pi_lr)
-    #TODO: see if we can get away with one adam optimizer for family of networks...
     vf_optimizer = Adam(ac.v.parameters(), lr=vf_lr)
-    #vf_optimizers = [Adam(ac.v.v_nets[i].parameters(), lr=vf_lr) for i in range(num_rew_fns)]
 
     # Set up model saving
     logger.setup_pytorch_saver(ac)
@@ -431,7 +425,7 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
     trajectories_y = []
     trash_trajectories = []
     num_trashes = []
-    obs_times = []
+    
     # Behavior clone policy on some initial demos
     if clone and num_demos > 0:
         for i in range(train_pi_BC_iters):
@@ -454,14 +448,13 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
         for t in tqdm(range(local_steps_per_epoch)):
             a, v, logp = ac.step(torch.as_tensor(o, dtype=torch.float32))
 
-            # TODO: Test unnormalizing the values
+            #Unnormalize Values
             v = (v * std_r.numpy()) + mean_r.numpy()
 
             next_o, r, d, info = env.step(a)
             if args.env == 'Shelf-v0' or args.env == 'reacher': # Check if you ever violate a constraint in this episode
                 if info['constraint']:
                     constraint_violated = True
-            #TODO: check this, but I think reward as function of next state makes most sense
             rew_dist = get_reward_distribution(args, reward_dist, env, next_o, a)
             total_reward_dist += rew_dist.flatten()
             running_ret += r
@@ -512,7 +505,6 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
 
                 if args.env == 'PointBot-v0':
                     last_trajectory = np.array(env.hist)
-                    obs_times.append(env.obs_time/100)
                     if TRASH:
                         num_trashes.append(len(env.current_trash_taken))
                     if epoch == epochs - 1:
@@ -537,6 +529,7 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
         bc_ret_list.append(np.max(total_reward_dist / float(num_runs)))
         cvar_list.append(sum(running_cvar))
         obstacle_list.append(obstacles / float(num_runs))
+        
         """print('True returns:', ret_list)
         print('Cvar: ', cvar_list)
         print('Worst case:', wc_ret_list)"""
@@ -561,7 +554,7 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
         print("Frac Constraint Violations: %d/%d" % (num_constraint_violations, num_episodes))
 
 
-    file_data = 'broil_data_120/'
+    file_data = 'broil_data/'
     experiment_name = args.env + '_alpha_' + str(broil_alpha) + '_lambda_' + str(broil_lambda)
 
     metrics = {"conditional value at risk": ('_cvar', cvar_list),
@@ -573,7 +566,6 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
     for metric, result in metrics.items():
         file_metric_description, results = result
         file_path = file_data + 'results/' + experiment_name + file_metric_description + '.txt'
-        #assert not os.path.isfile(file_path)  # make sure we are making a new file and not overwriting
         with open(file_path, 'w') as f:
             for item in results:
                 f.write("%s\n" % item)
@@ -584,6 +576,7 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
                 return obj.tolist()
             return JSONEncoder.default(self, obj)
     
+    #Create PointBot Trajectory Visualization with Multiple Lambdas and Input for grapher.py
     if args.env == 'PointBot-v0':
         plt.ylim((env.grid[2], env.grid[3]))
         plt.xlim((env.grid[0], env.grid[1]))
@@ -613,7 +606,8 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
             if TRASH:
                 for j in trash_trajectories[i]:
                     plt.scatter([j[0]],[j[1]], [25], zorder = 10, color = '#000000')
-
+        
+        #Create Single PointBot Visualization for lambda
         x_bounds = [obstacle.boundsx for obstacle in env.obstacle.obs]
         y_bounds = [obstacle.boundsy for obstacle in env.obstacle.obs]
         for i in range(len(x_bounds)):
@@ -621,7 +615,7 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
         
         plt.savefig(file_data + 'visualizations/' + experiment_name + '.png')
         plt.clf()
-        torch.save(ac.state_dict(), file_data + 'PointBot_networks/' + experiment_name + '.pt')
+        #torch.save(ac.state_dict(), file_data + 'PointBot_networks/' + experiment_name + '.pt')
         env = gym.make(args.env)
         visualize_policy(env, args.num_rollouts, ac, num_rew_fns, std_r, mean_r, reward_dist, local_steps_per_epoch, broil_alpha, file_data, args, max_ep_len, t, broil_lambda)
   
@@ -634,6 +628,7 @@ if __name__ == '__main__':
     import time
     parser = argparse.ArgumentParser()
     parser.add_argument('--env', type=str, default='CartPole-v0')
+    parser.add_argument('--brex', type=bool, default=False)
     parser.add_argument('--hid', type=int, default=64)
     parser.add_argument('--l', type=int, default=2)
     parser.add_argument('--gamma', type=float, default=0.99)
@@ -663,9 +658,10 @@ if __name__ == '__main__':
     if args.env == 'CartPole-v0':
         reward_dist = CartPoleReward()
     elif args.env == 'PointBot-v0':
-        reward_dist = PointBotReward()
-    elif args.env == 'HalfCheetah-v2':
-        reward_dist = CheetahReward()
+        if args.brex:
+            reward_dist = PointBotRewardBrex()
+        else:
+            reward_dist = PointBotReward()
     elif args.env == 'Shelf-v0':
         reward_dist = ShelfReward()
     elif args.env == 'reacher':
