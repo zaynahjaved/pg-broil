@@ -1,6 +1,6 @@
 Running Policy Gradient BROIL:
 ==================================
-##To run BROIL VPG:
+To run BROIL VPG:
 In the spinningup/spinup/algos/pytorch/vpg directory run
 ```bash
 python broil_vpg2.py --env (CartPole-v0, PointBot-v0)
