@@ -107,6 +107,15 @@ and check in the respective folder for the trajectory visualization and in maze_
 
 
 ## Trashbot
+### Demonstrator
+
+To create demonstrations for the TrashBot environment first go to the spinningup/spinup/envs/pointbot_const.py and change the constants to create the trash environment in the paper which is given in the comments. Then run demonstrator.py
+
+```
+python demonstrator.py
+```
+Use mouse clicks to apply x and y force to the bot. If the bot is close enough to the trash another piece of trash will randomly spawn in the environment. The demonstrations will be created in pairs. The first demonstration is the good demo while the second is the bad demo. Then go to the demonstrations folder where there a folder will be created with visualizations of both demonstrations, .txt files with the states and actions, and the pickle files used for the algorithms.
+
 
 ### Behavioral Cloning 
 
