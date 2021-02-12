@@ -47,9 +47,9 @@ Make sure to create the right folders (line 41) and metric (line 15: 'cvar', 'ex
 
 To run evaluation of pretrained policy to get risk and return for plotting pareto frontier:
 
-Pretrain a policy using spinningup then use evaluate_policy.py and give it the save path and the env name and it will run 100 policy evaluations and return the expected return under the posterior the cvar
+Pretrain a policy using spinningup then use evaluate_policy.py and give it the save path and the env name and it will run 100 policy evaluations and return the expected return under the posterior the cvar.
 
-Note you need to pass in the max horizon for the mdp to initialize the buffer size. Max horizon should be the max number of steps possible in the environment.
+Note you need to pass in the max horizon for the MDP to initialize the buffer size. Max horizon should be the max number of steps possible in the environment.
 
 ```
 python spinup/algos/pytorch/evaluation/evaluate_policy.py --save_path spinningup/data/installtest/installtest_s0 --env CartPole-v0 --num_rollouts 100 --max_horizon 200
@@ -67,14 +67,14 @@ To generate the Bayesian REX posterior used in the appendix for the reacher envi
 python spinup/algos/pytorch/rex/brex/brex_basic.py --features_dir demonstrations/reacher_easy_demos --env reacher --normalize
 ```
 
-This will also print out the mean and MAP reward. To run a PBRL baseline on , take the outputted MAP and put it into the spinup/examples/pytorch/broil_rtg_pg_v2/reacher_reward_utils.py or spinup/examples/pytorch/broil_rtg_pg_v2/pointbot_reward_utils.py (depending on the environment you want to run) and set the self.posterior to an array containing just 1.
+This will also print out the mean and MAP reward. To run a PBRL baseline, take the outputted MAP and put it into the spinup/examples/pytorch/broil_rtg_pg_v2/reacher_reward_utils.py or spinup/examples/pytorch/broil_rtg_pg_v2/pointbot_reward_utils.py (depending on the environment you want to run) and set the self.posterior to an array containing just 1.
 
 ===========================================
 
 For the Pointbot Navigation environment:
 Change the reward function posterior by going to spinningup/spinup/examples/pytorch/broil_rtg_pg_v2/pointbot_reward_utils.py and changing the self.penalties and self.posterior attributes. The default attributes are the ones used for the paper.
 
-To recreate figure 2b and 2e go to spinningup/spinup/experiments/grapher.py and change the name_of_grid_search variable to maze_ppo_cvar**. To recreate figure 5 in the appendix change the name_of_grid_search variable to maze_ppo_erm**. Then run 
+To recreate figures 2b and 2e go to spinningup/spinup/experiments/grapher.py and change the name_of_grid_search variable to maze_ppo_cvar**. To recreate figure 5 in the appendix change the name_of_grid_search variable to maze_ppo_erm**. Then run 
 ```
 python grapher.py
 ```
@@ -83,7 +83,7 @@ and check in the respective folder for the trajectory visualization and in maze_
 
 ===========================================
 
-To run BC for the TrashBot environment first go to the spinningup/spinup/envs/pointbot_const.py and change the constants to create the trash enviornment in the paper which is given in the comments. Then add the pkl files of the demos created by demonstrator.py (the demos used in the paper are already inside the demos folder). Then go to the spinningup/spinup/algos/pytorch/ppo directory and run the command:
+To run BC for the TrashBot environment first go to the spinningup/spinup/envs/pointbot_const.py and change the constants to create the trash environment in the paper which is given in the comments. Then add the pkl files of the demos created by demonstrator.py (the demos used in the paper are already inside the demos folder). Then go to the spinningup/spinup/algos/pytorch/ppo directory and run the command:
 ```
 python bc.py --env PointBot-v0
 ```
