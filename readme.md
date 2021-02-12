@@ -9,6 +9,7 @@ Pass in BROIL arguments using
 ```bash
 --broil_lambda
 --broil_alpha
+--risk_metric (cvar,erm)
 ```
 (Can also pass in all of the arguments listed in the original spinningup vpg.py code, ie: seed, epochs, env_name, policy_lr, etc)
 
