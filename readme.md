@@ -57,7 +57,7 @@ pretrain policy using spinninup then use evaluate_policy.py and give it the save
 Note you need to pass in the max horizon for the mdp to initialize the buffer size. max horizon should be the max number of steps possible in the environment.
 
 ```
-python spinup/algos/pytorch/evaluation/evaluate_policy.py --save_path /home/dsbrown/code/spinningup/data/installtest/installtest_s0 --env CartPole-v0 --num_rollouts 100 --max_horizon 200
+python spinup/algos/pytorch/evaluation/evaluate_policy.py --save_path /home/user/code/spinningup/data/installtest/installtest_s0 --env CartPole-v0 --num_rollouts 100 --max_horizon 200
 ```
 ===========================================
 
