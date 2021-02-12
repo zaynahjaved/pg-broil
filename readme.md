@@ -1,5 +1,30 @@
-Running Policy Gradient BROIL:
-==================================
+# Policy Gradient Bayesian Robust Optimization for Imitation Learning
+
+## Installation
+
+This code repo builds on the OpenAI Spinning Up gitrepo. First follow the instructions to install (see https://spinningup.openai.com/en/latest/user/installation.html for more details):
+
+```
+conda create -n pgbroil python=3.6
+conda activate pgbroil
+pip install -e .
+```
+
+Also install dm_control suite
+```
+cd dm_control
+pip install -e .
+cd ..
+cd dmc2gym
+pip install -e .
+```
+
+
+
+
+
+## Running Policy Gradient BROIL:
+
 Dependencies for the CartPole environment can be installed by installing Open AI Gym (pip install gym). Dependencies for the Reacher environment can be installed by pip installing the modified version of the dm_control package and an Open AI gym wrapper for the package which are both included in the included source. To do this, run the folllowing from the spinningup directory:
 
 pip install dm_control dmc2gym
