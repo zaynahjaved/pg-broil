@@ -48,7 +48,7 @@ Make sure to create the right folders (line 41) and metric (line 15: 'cvar', 'ex
 Default Arguments are defined in lines 507-522
 File saving file directories are defined in lines 466-501
 Alpha, Lambda, pi_lr, and vf_lr parameter arrays are defined in lines 539-546 to run multiple parameters
-I also changed train_pi_iters from 80 to 40 on line 111.
+Change train_pi_iters from 80 to 40 on line 111.
 
 ===========================================
 
@@ -81,12 +81,8 @@ To recreate figure 2b and 2e go to spinup/experiments/grapher.py and change the 
 ```
 python grapher.py
 ```
-and check in the respective folder for the trajecotry visualization and in maze_ppo_erm**/visualizations or maze_ppo_cvar**/visualizations for the pareto frontier.
+and check in the respective folder for the trajectory visualization and in maze_ppo_erm**/visualizations or maze_ppo_cvar**/visualizations for the pareto frontier.
 
-To train some policies with different values of alpha and lambda go to spinup/algos/pytorch/ppo/broil_ppo_grid.sh and change values in the script. To run ERM instead of CVaR use the risk_metric flag. Then run:
-```
-./broil_ppo_grid.sh
-```
 
 Welcome to Spinning Up in Deep RL!
 ==================================
