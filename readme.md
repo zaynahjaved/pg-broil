@@ -64,13 +64,11 @@ python spinup/algos/pytorch/evaluation/evaluate_policy.py --save_path /home/dsbr
 To generate the Bayesian REX posteriors used in the paper for TrashBot run:
 
 ```
-bash
 python spinup/algos/pytorch/rex/brex/brex_basic.py --features_dir demonstrations/trashbot_demos --normalize
 ```
 
 To generate the Bayesian REX posterior used in the appendix for the reacher environment run:
 ```
-bash
 python spinup/algos/pytorch/rex/brex/brex_basic.py --features_dir demonstrations/reacher_easy_demos --env reacher --normalize
 ```
 
