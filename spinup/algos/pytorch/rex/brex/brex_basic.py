@@ -145,7 +145,9 @@ if __name__=="__main__":
     parser.add_argument('--mcmc_step_size', default = 0.5, type=float, help="proposal step is gaussian with zero mean and mcmc_step_size stdev")
     parser.add_argument('--confidence', default=1, type=int, help='confidence in rankings, the beta parameter in the softmax')
     parser.add_argument('--normalize', default=False, action='store_true', help='turns on normalization so the reward function weight vectors have norm of 1')
-    parser.add_argument('--features_dir', default='feature_files')
+    parser.add_argument('--features_dir', default='feature_files', help='directory containing pickle files of demonstration feature counts')
+    parser.add_argument('--save_file', default='brex_reward_dist.pickle', help='where to save the outputted BREX reward distribution')
+    parser.add_argument('--env', default=None, help='which environment this BREX reward is being generated for')
 
     args = parser.parse_args()
 
@@ -153,23 +155,36 @@ if __name__=="__main__":
     #model_files = []
     
     pickle_files = []
-    import os
-    for file_dir in ["demos_5"]:
-        for filename in os.listdir(file_dir):
-            if filename.endswith(".pkl"):
+    import os:
+        for filename in os.listdir(args.features_dir):
+            if filename.endswith(".pkl" or ".p"):
                 pickle_files.append(file_dir + "/" + filename)
     print(pickle_files)
 
     demo_fcnts = []
     pairwise_prefs = []
     counter = 0
-    for file in pickle_files:
-        with open(file, 'rb') as handle:
-            b = pickle.load(handle)
-            demo_fcnts += [b["Bad"]]
-            demo_fcnts += [b["Good"]]
-            pairwise_prefs += [(counter, counter+1)]
-            counter += 2
+    if args.env == 'reacher':
+        for file in pickle_files:
+            sum_feat = np.array([0.0,0.0,0.0])
+            with open(file, 'rb') as handle:
+                b = pickle.load(handle)
+                for arr in b['features']:
+                    sum_feat += arr
+
+                sum_feat = [sum_feat[0], sum_feat[1]]
+                demo_fcnts.append(sum_feat)
+        pairwise_prefs =  [(5,4),(4,3),(3,2),(2,1),(1,0)]
+
+
+    else:
+        for file in pickle_files:
+            with open(file, 'rb') as handle:
+                b = pickle.load(handle)
+                demo_fcnts += [b["Bad"]]
+                demo_fcnts += [b["Good"]]
+                pairwise_prefs += [(counter, counter+1)]
+                counter += 2
 
     print("Hand crafted feature expectations")
     #set seeds
@@ -187,8 +202,9 @@ if __name__=="__main__":
     #                       [  0.8, 0.3,   0.3]])
 
     # true_weights = np.array([+1,-1,+1])
-
     num_features = 3 #inside obstacle, outside obstacle, number of trash
+    if args.env == 'reacher':
+        num_features = 2
     """
     demo_fcnts = np.array([[0.0, 12.0],  #0: good trajectory that only goes in a little bit
                             [5.0, 8.0],  #1: bad trajectory that goes in a lot
@@ -259,22 +275,28 @@ if __name__=="__main__":
     brex_subsample_distr = [0, 0, 0]
     for i in range(sampling_chain.shape[0]):
         if (i%sampling_rate == 0):
-            weight_to_prob[(sampling_chain[i][0], sampling_chain[i][1], sampling_chain[i][2])] = 1
-            brex_subsample_distr[0] = brex_subsample_distr[0] + sampling_chain[i][0]
-            brex_subsample_distr[1] = brex_subsample_distr[1] + sampling_chain[i][1]
-            brex_subsample_distr[2] = brex_subsample_distr[2] + sampling_chain[i][2]
+            if args.env == 'reacher':
+                weight_to_prob[(sampling_chain[i][0], sampling_chain[i][1])] = 1
+                brex_subsample_distr[0] = brex_subsample_distr[0] + sampling_chain[i][0]
+                brex_subsample_distr[1] = brex_subsample_distr[1] + sampling_chain[i][1]
+            else:
+                weight_to_prob[(sampling_chain[i][0], sampling_chain[i][1], sampling_chain[i][2])] = 1
+                brex_subsample_distr[0] = brex_subsample_distr[0] + sampling_chain[i][0]
+                brex_subsample_distr[1] = brex_subsample_distr[1] + sampling_chain[i][1]
+                brex_subsample_distr[2] = brex_subsample_distr[2] + sampling_chain[i][2]
 
     for key in weight_to_prob:
         weight_to_prob[key] = 1/(len(weight_to_prob))
 
     brex_subsample_distr[0] = brex_subsample_distr[0]/(len(weight_to_prob))
     brex_subsample_distr[1] = brex_subsample_distr[1]/(len(weight_to_prob))
-    brex_subsample_distr[2] = brex_subsample_distr[2]/(len(weight_to_prob))
+    if args.env != 'reacher':
+        brex_subsample_distr[2] = brex_subsample_distr[2]/(len(weight_to_prob))
 
     print('WEIGHTS TO PROBABILITY')
     print(weight_to_prob)
 
-    with open('brex_reward_dist_unnormalized.pickle', 'wb') as handle:
+    with open(args.save_file, 'wb') as handle:
         pickle.dump(weight_to_prob , handle, protocol=pickle.HIGHEST_PROTOCOL)
     #End saving reward distribution
 
