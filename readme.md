@@ -61,16 +61,29 @@ python spinup/algos/pytorch/evaluation/evaluate_policy.py --save_path /home/dsbr
 ```
 ===========================================
 
+To generate the Bayesian REX posteriors used in the paper for TrashBot run:
+
+```
+bash
+python spinup/algos/pytorch/rex/brex/brex_basic.py --features_dir demonstrations/trashbot_demos --normalize
+```
+
+To generate the Bayesian REX posterior used in the appendix for the reacher environment run:
+```
+bash
+python spinup/algos/pytorch/rex/brex/brex_basic.py --features_dir demonstrations/reacher_easy_demos --env reacher --normalize
+```
+
 For the Pointbot Navigation enviornment:
-Change the reward function posterior by going to spinup/examples/pytorch/broil_rtg_pg_v2/pointbot_reward_utils.py and changing the self.penalties and self.posterior attributes. The default attributes are the ones used for the paper.
+Change the reward function posterior by going to spinup/examples/pytorch/broil_rtg_pg_v2/pointbot_reward_utils.py and changing the self.penatilies and self.postierior attributes. The default attributes are the ones used for the paper.
 
 To recreate figure 2b and 2e go to spinup/experiments/grapher.py and change the name_of_grid_search variable to maze_ppo_cvar**. To recreate figure 5 in the appendix change the name_of_grid_search variable to maze_ppo_erm**. Then run 
 ```
 python grapher.py
 ```
-and check in the respective folder for the trajectory visualization and in maze_ppo_erm**/visualizations or maze_ppo_cvar**/visualizations for the pareto frontier.
+and check in the respective folder for the trajecotry visuzalization and in maze_ppo_erm**/visualziaitons or maze_ppo_cvar**/visualziaitons for the pareto frontier.
 
-To train some policies with different values of alpha and lambda go to spinup/algos/pytorch/ppo/broil_ppo_grid.sh and change values in the script. To run ERM instead of CVaR use the risk_metric flag. Then run:
+To train some policies with differnt values of alpha and lambda go to spinup/algos/pytorch/ppo/broil_ppo_grid.sh and change values in the script. To run ERM instead of CVaR use the risk_metric flag. Then run:
 ```
 ./broil_ppo_grid.sh
 ```
