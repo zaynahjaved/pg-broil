@@ -43,18 +43,11 @@ python select_data_to_graph.py
 Make sure to create the right folders (line 41) and metric (line 15: 'cvar', 'expected_return') to graph the wanted data.
 
 
-
-
-Default Arguments are defined in lines 507-522
-File saving file directories are defined in lines 466-501
-Alpha, Lambda, pi_lr, and vf_lr parameter arrays are defined in lines 539-546 to run multiple parameters
-Change train_pi_iters from 80 to 40 on line 111.
-
 ===========================================
 
 To run evaluation of pretrained policy to get risk and return for plotting pareto frontier
 
-pretrain policy using spinninup then use evaluate_policy.py and give it the save path and the env name and it will run 100 policy evaluations and return the expected return under the posterior the cvar
+Pretrain a policy using spinningup then use evaluate_policy.py and give it the save path and the env name and it will run 100 policy evaluations and return the expected return under the posterior the cvar
 
 Note you need to pass in the max horizon for the mdp to initialize the buffer size. Max horizon should be the max number of steps possible in the environment.
 
