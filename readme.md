@@ -19,12 +19,21 @@ Pass in BROIL arguments using
 To run BROIL PPO:
 In the spinningup/spinup/algos/pytorch/ppo directory:
 
-First create a folder (broil_dataX) and 3 subfolders (results, visualizations, PointBot_networks) within the PPO directory. Make sure to rename "broil_dataX" on line 476 so files are saved in the right folder. Then run the following command for a grid_search:
+First create a folder (broil_dataX) and 3 subfolders (results, visualizations, PointBot_networks) within the PPO directory. Make sure to rename "broil_dataX" on line 476 so files are saved in the right folder. Then run the following command for a grid_search over PointBot-v0:
 ```bash
 chmod +x broil_ppo_grid.sh
 ./broil_ppo_grid.sh
 ```
-
+To run BROIL PPO on an environment:
+```bash
+python broil_ppo.py --env (CartPole-v0, PointBot-v0, reacher)
+```
+Pass in BROIL arguments using
+```bash
+--broil_lambda
+--broil_alpha
+--risk_metric (cvar,erm)
+```
 
 
 
