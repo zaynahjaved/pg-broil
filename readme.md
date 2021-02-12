@@ -1,5 +1,10 @@
 Running Policy Gradient BROIL:
 ==================================
+Dependencies for the CartPole environment can be installed by installing Open AI Gym (pip install gym). Dependencies for the Reacher environment can be installed by pip installing the modified version of the dm_control package and an Open AI gym wrapper for the package which are both included in the included source. To do this, run the folllowing from the spinningup directory:
+
+pip install dm_control
+pip install dmc2gym
+
 To run BROIL VPG:
 In the spinningup/spinup/algos/pytorch/vpg directory run
 ```bash
