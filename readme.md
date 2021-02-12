@@ -74,14 +74,31 @@ To generate the Bayesian REX posterior used in the appendix for the reacher envi
 python spinup/algos/pytorch/rex/brex/brex_basic.py --features_dir demonstrations/reacher_easy_demos --env reacher --normalize
 ```
 
-For the Pointbot Navigation enviornment:
-Change the reward function posterior by going to spinup/examples/pytorch/broil_rtg_pg_v2/pointbot_reward_utils.py and changing the self.penatilies and self.postierior attributes. The default attributes are the ones used for the paper.
+For the Pointbot Navigation environment:
+Change the reward function posterior by going to spinningup/spinup/examples/pytorch/broil_rtg_pg_v2/pointbot_reward_utils.py and changing the self.penalties and self.posterior attributes. The default attributes are the ones used for the paper.
 
-To recreate figure 2b and 2e go to spinup/experiments/grapher.py and change the name_of_grid_search variable to maze_ppo_cvar**. To recreate figure 5 in the appendix change the name_of_grid_search variable to maze_ppo_erm**. Then run 
+To recreate figure 2b and 2e go to spinningup/spinup/experiments/grapher.py and change the name_of_grid_search variable to maze_ppo_cvar**. To recreate figure 5 in the appendix change the name_of_grid_search variable to maze_ppo_erm**. Then run 
 ```
 python grapher.py
 ```
 and check in the respective folder for the trajectory visualization and in maze_ppo_erm**/visualizations or maze_ppo_cvar**/visualizations for the pareto frontier.
+
+
+===========================================
+
+To run BC for the TrashBot environment first go to the spinningup/spinup/envs/pointbot_const.py and change the constants to create the trash enviornment in the paper which is given in the comments. Then add the pkl files of the demos created by demonstrator.py (the demos used in the paper are already inside the demos folder). Then go to the spinningup/spinup/algos/pytorch/ppo directory and run the command:
+```
+python bc.py --env PointBot-v0
+```
+A folder will be created in the working directory which will have example rollouts and average statistics for trash collected and steps in the gray region.
+
+===========================================
+
+To run GAIL for the TrashBot environment first go to the spinningup/spinup/envs/pointbot_const.py and change the constants to create the trash enviornment in the paper which is given in the comments. Then add the pkl files of the demos created by demonstrator.py (the demos used in the paper are already inside the demos folder). Then go to the spinningup/spinup/algos/pytorch/PyTorch-RL directory and run the command:
+```
+python gail/gail_gym.py --env PointBot-v0
+```
+A folder will be created in the working directory which will have example rollouts, rollouts for each epoch, the reward graph over epochs, and average statistics for trash collected and steps in the gray region.
 
 
 Welcome to Spinning Up in Deep RL!
