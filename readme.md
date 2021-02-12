@@ -36,7 +36,9 @@ Pass in BROIL arguments using
 
 Once the above command finishes running, you can plot the cvar and expected value graphs by going into the broil_dataX folder and run:
 
-python3 select_data_to_graph.py
+```
+python select_data_to_graph.py
+```
 
 Make sure to create the right folders (line 41) and metric (line 15: 'cvar', 'expected_return') to graph the wanted data.
 
@@ -54,10 +56,10 @@ To run evaluation of pretrained policy to get risk and return for plotting paret
 
 pretrain policy using spinninup then use evaluate_policy.py and give it the save path and the env name and it will run 100 policy evaluations and return the expected return under the posterior the cvar
 
-Note you need to pass in the max horizon for the mdp to initialize the buffer size. max horizon should be the max number of steps possible in the environment.
+Note you need to pass in the max horizon for the mdp to initialize the buffer size. Max horizon should be the max number of steps possible in the environment.
 
 ```
-python spinup/algos/pytorch/evaluation/evaluate_policy.py --save_path /home/user/code/spinningup/data/installtest/installtest_s0 --env CartPole-v0 --num_rollouts 100 --max_horizon 200
+python spinup/algos/pytorch/evaluation/evaluate_policy.py --save_path spinningup/data/installtest/installtest_s0 --env CartPole-v0 --num_rollouts 100 --max_horizon 200
 ```
 ===========================================
 
@@ -79,9 +81,9 @@ To recreate figure 2b and 2e go to spinup/experiments/grapher.py and change the 
 ```
 python grapher.py
 ```
-and check in the respective folder for the trajecotry visuzalization and in maze_ppo_erm**/visualziaitons or maze_ppo_cvar**/visualziaitons for the pareto frontier.
+and check in the respective folder for the trajecotry visualization and in maze_ppo_erm**/visualizations or maze_ppo_cvar**/visualizations for the pareto frontier.
 
-To train some policies with differnt values of alpha and lambda go to spinup/algos/pytorch/ppo/broil_ppo_grid.sh and change values in the script. To run ERM instead of CVaR use the risk_metric flag. Then run:
+To train some policies with different values of alpha and lambda go to spinup/algos/pytorch/ppo/broil_ppo_grid.sh and change values in the script. To run ERM instead of CVaR use the risk_metric flag. Then run:
 ```
 ./broil_ppo_grid.sh
 ```
