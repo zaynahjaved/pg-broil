@@ -2,7 +2,9 @@
 
 ## Installation
 
-This code repo builds on the OpenAI Spinning Up gitrepo. First follow the instructions to install (see https://spinningup.openai.com/en/latest/user/installation.html for more details):
+Dependencies for the CartPole environment can be installed by installing Open AI Gym. Dependencies for the Reacher environment can be installed by pip installing the modified version of the dm_control package and an Open AI gym wrapper for the package which are both included in the included source. 
+
+This code repo builds on the [OpenAI Spinning Up gitrepo](https://spinningup.openai.com/en/latest/user/installation.html). First follow the instructions to install:
 
 ```
 conda create -n pgbroil python=3.6
@@ -12,11 +14,8 @@ pip install -e .
 
 Also install dm_control suite
 ```
-cd dm_control
-pip install -e .
-cd ..
-cd dmc2gym
-pip install -e .
+
+pip install dm_control dmc2gym
 ```
 
 
@@ -25,9 +24,6 @@ pip install -e .
 
 ## Running Policy Gradient BROIL:
 
-Dependencies for the CartPole environment can be installed by installing Open AI Gym (pip install gym). Dependencies for the Reacher environment can be installed by pip installing the modified version of the dm_control package and an Open AI gym wrapper for the package which are both included in the included source. To do this, run the folllowing from the spinningup directory:
-
-pip install dm_control dmc2gym
 
 To run BROIL VPG:
 In the spinningup/spinup/algos/pytorch/vpg directory run
@@ -72,7 +68,7 @@ python select_data_to_graph.py
 Make sure to create the right folders (line 41) and metric (line 15: 'cvar', 'expected_return') to graph the wanted data.
 
 
-===========================================
+## Evaluation of pretrained policy
 
 To run evaluation of pretrained policy to get risk and return for plotting pareto frontier:
 
@@ -83,7 +79,7 @@ Note you need to pass in the max horizon for the MDP to initialize the buffer si
 ```
 python spinup/algos/pytorch/evaluation/evaluate_policy.py --save_path spinningup/data/installtest/installtest_s0 --env CartPole-v0 --num_rollouts 100 --max_horizon 200
 ```
-===========================================
+## Bayesian REX
 
 To generate the Bayesian REX posteriors used in the paper for TrashBot run:
 
@@ -98,7 +94,7 @@ python spinup/algos/pytorch/rex/brex/brex_basic.py --features_dir demonstrations
 
 This will also print out the mean and MAP reward. To run a PBRL baseline, take the outputted MAP and put it into the spinup/examples/pytorch/broil_rtg_pg_v2/reacher_reward_utils.py or spinup/examples/pytorch/broil_rtg_pg_v2/pointbot_reward_utils.py (depending on the environment you want to run) and set the self.posterior to an array containing just 1.
 
-===========================================
+## Pointbot Navigation
 
 For the Pointbot Navigation environment:
 Change the reward function posterior by going to spinningup/spinup/examples/pytorch/broil_rtg_pg_v2/pointbot_reward_utils.py and changing the self.penalties and self.posterior attributes. The default attributes are the ones used for the paper.
@@ -110,7 +106,9 @@ python grapher.py
 and check in the respective folder for the trajectory visualization and in maze_ppo_erm**/visualizations or maze_ppo_cvar**/visualizations for the pareto frontier.
 
 
-===========================================
+## Trashbot
+
+### Behavioral Cloning 
 
 To run BC for the TrashBot environment first go to the spinningup/spinup/envs/pointbot_const.py and change the constants to create the trash environment in the paper which is given in the comments. Then add the pkl files of the demos created by demonstrator.py (the demos used in the paper are already inside the demos folder). Then go to the spinningup/spinup/algos/pytorch/ppo directory and run the command:
 ```
@@ -118,7 +116,7 @@ python bc.py --env PointBot-v0
 ```
 A folder will be created in the working directory which will have example rollouts and average statistics for trash collected and steps in the gray region.
 
-===========================================
+### GAIL
 
 To run GAIL for the TrashBot environment first go to the spinningup/spinup/envs/pointbot_const.py and change the constants to create the trash enviornment in the paper which is given in the comments. Then add the pkl files of the demos created by demonstrator.py (the demos used in the paper are already inside the demos folder). Then go to the spinningup/spinup/algos/pytorch/PyTorch-RL directory and run the command:
 ```
@@ -126,6 +124,7 @@ python gail/gail_gym.py --env PointBot-v0
 ```
 A folder will be created in the working directory which will have example rollouts, rollouts for each epoch, the reward graph over epochs, and average statistics for trash collected and steps in the gray region.
 
+This code is forked from openai/spinningup:
 
 Welcome to Spinning Up in Deep RL!
 ==================================
