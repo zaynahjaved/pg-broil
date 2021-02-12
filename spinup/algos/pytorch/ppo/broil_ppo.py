@@ -615,7 +615,7 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
         
         plt.savefig(file_data + 'visualizations/' + experiment_name + '.png')
         plt.clf()
-        #torch.save(ac.state_dict(), file_data + 'PointBot_networks/' + experiment_name + '.pt')
+        torch.save(ac.state_dict(), file_data + 'PointBot_networks/' + experiment_name + '.pt')
         env = gym.make(args.env)
         visualize_policy(env, args.num_rollouts, ac, num_rew_fns, std_r, mean_r, reward_dist, local_steps_per_epoch, broil_alpha, file_data, args, max_ep_len, t, broil_lambda)
   
