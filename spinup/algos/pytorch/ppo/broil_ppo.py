@@ -23,6 +23,8 @@ from spinup.examples.pytorch.broil_rtg_pg_v2.cartpole_reward_utils import CartPo
 from spinup.examples.pytorch.broil_rtg_pg_v2.manipulator_reward_utils import ManipulatorReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.safety_gym_reward_utils import SafetyGymReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.shelf_reward_utils import ShelfReward
+from spinup.examples.pytorch.broil_rtg_pg_v2.boxing_reward_utils import BoxingReward
+from spinup.examples.pytorch.broil_rtg_pg_v2.boxing_reward_brex import BoxingRewardBrex
 
 from spinup.examples.pytorch.broil_rtg_pg_v2.cvar_utils import cvar_enumerate_pg
 import dmc2gym
@@ -199,7 +201,7 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
     # Special function to avoid certain slowdowns from PyTorch + MPI combo.
 
 
-    def get_reward_distribution(args, reward_dist, env, next_o, action):
+    def get_reward_distribution(args, reward_dist, env, next_o, env_rew, action):
         if args.env == 'CartPole-v0':
             rew_dist = reward_dist.get_reward_distribution(next_o)
         elif args.env == 'PointBot-v0':
@@ -210,6 +212,8 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
             rew_dist = reward_dist.get_reward_distribution(env)
         elif args.env == 'manipulator':
             rew_dist = reward_dist.get_reward_distribution(env)
+        elif args.env == 'Boxing-ram-v0':
+            rew_dist = reward_dist.get_reward_distribution(env_rew)
         elif 'Safexp' in args.env:
             rew_dist = reward_dist.get_reward_distribution(env)
         else:
@@ -455,7 +459,7 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
             if args.env == 'Shelf-v0' or args.env == 'reacher': # Check if you ever violate a constraint in this episode
                 if info['constraint']:
                     constraint_violated = True
-            rew_dist = get_reward_distribution(args, reward_dist, env, next_o, a)
+            rew_dist = get_reward_distribution(args, reward_dist, env, next_o, r, a)
             total_reward_dist += rew_dist.flatten()
             running_ret += r
             ep_ret += r
@@ -668,6 +672,11 @@ if __name__ == '__main__':
         reward_dist = ReacherRewardBrex()
     elif args.env == 'manipulator':
         reward_dist = ManipulatorReward()
+    elif args.env == 'Boxing-ram-v0':
+        if args.brex:
+            reward_dist = BoxingRewardBrex()
+        else:
+            reward_dist = BoxingReward()
     elif 'Safexp' in args.env:
         reward_dist = SafetyGymReward()
     else:
@@ -677,7 +686,7 @@ if __name__ == '__main__':
         import safety_gym
 
     if args.env == 'reacher':
-        env_fn = lambda: dmc2gym.make(domain_name='reacher', task_name='easy', seed=args.seed, episode_length=200)
+        env_fn = lambda: dmc2gym.make(domain_name='reacher', task_name='easy',visualize_reward=False,from_pixels=True,seed=args.seed, episode_length=200)
     elif args.env == 'manipulator':
         env_fn = lambda: dmc2gym.make(domain_name='manipulator', task_name='bring_ball', seed=args.seed)
     else:
