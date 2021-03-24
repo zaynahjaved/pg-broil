@@ -18,7 +18,7 @@ from spinup.utils.mpi_tools import mpi_fork, mpi_avg, proc_id, mpi_statistics_sc
 
 from spinup.examples.pytorch.broil_rtg_pg_v2.pointbot_reward_utils import PointBotReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.pointbot_reward_brex import PointBotRewardBrex
-from spinup.examples.pytorch.broil_rtg_pg_v2.reacher_reward_brex import ReacherRewardBrex
+from spinup.examples.pytorch.broil_rtg_pg_v2.reacher_reward_utils import ReacherReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.cartpole_reward_utils import CartPoleReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.manipulator_reward_utils import ManipulatorReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.safety_gym_reward_utils import SafetyGymReward
@@ -429,7 +429,7 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
     trajectories_y = []
     trash_trajectories = []
     num_trashes = []
-    
+    obs_times = []
     # Behavior clone policy on some initial demos
     if clone and num_demos > 0:
         for i in range(train_pi_BC_iters):
@@ -465,6 +465,7 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
             ep_ret += r
             ep_len += 1
             if args.env == 'PointBot-v0':
+                #print(env.obstacle(next_o))
                 obstacles += int(env.obstacle(next_o))
 
 
@@ -511,6 +512,8 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
                     last_trajectory = np.array(env.hist)
                     if TRASH:
                         num_trashes.append(len(env.current_trash_taken))
+                        obs_times.append(obstacles)
+                        obstacles = 0
                     if epoch == epochs - 1:
                         trajectories_x.append(last_trajectory[:, 0])
                         trajectories_y.append(last_trajectory[:, 2])
@@ -621,8 +624,12 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
         plt.clf()
         torch.save(ac.state_dict(), file_data + 'PointBot_networks/' + experiment_name + '.pt')
         env = gym.make(args.env)
-        visualize_policy(env, args.num_rollouts, ac, num_rew_fns, std_r, mean_r, reward_dist, local_steps_per_epoch, broil_alpha, file_data, args, max_ep_len, t, broil_lambda)
-  
+        #visualize_policy(env, args.num_rollouts, ac, num_rew_fns, std_r, mean_r, reward_dist, local_steps_per_epoch, broil_alpha, file_data, args, max_ep_len, t, broil_lambda)
+        if args.env == 'PointBot-v0':
+            print(np.average(num_trashes[-100:]))
+            print(np.std(num_trashes[-100:]))
+            print(np.average(obs_times[-100:]))
+            print(np.std(obs_times[-100:]))
     
 
     print(' Data from experiment: ', experiment_name, ' saved.')
@@ -669,7 +676,7 @@ if __name__ == '__main__':
     elif args.env == 'Shelf-v0':
         reward_dist = ShelfReward()
     elif args.env == 'reacher':
-        reward_dist = ReacherRewardBrex()
+        reward_dist = ReacherReward()
     elif args.env == 'manipulator':
         reward_dist = ManipulatorReward()
     elif args.env == 'Boxing-ram-v0':
@@ -686,7 +693,7 @@ if __name__ == '__main__':
         import safety_gym
 
     if args.env == 'reacher':
-        env_fn = lambda: dmc2gym.make(domain_name='reacher', task_name='easy',visualize_reward=False,from_pixels=True,seed=args.seed, episode_length=200)
+        env_fn = lambda: dmc2gym.make(domain_name='reacher', task_name='hard',seed=args.seed)
     elif args.env == 'manipulator':
         env_fn = lambda: dmc2gym.make(domain_name='manipulator', task_name='bring_ball', seed=args.seed)
     else:
