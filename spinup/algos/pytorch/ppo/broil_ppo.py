@@ -23,8 +23,9 @@ from spinup.examples.pytorch.broil_rtg_pg_v2.cartpole_reward_utils import CartPo
 from spinup.examples.pytorch.broil_rtg_pg_v2.manipulator_reward_utils import ManipulatorReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.safety_gym_reward_utils import SafetyGymReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.shelf_reward_utils import ShelfReward
+from spinup.examples.pytorch.broil_rtg_pg_v2.itch_reward_utils import ItchReward
 from spinup.examples.pytorch.broil_rtg_pg_v2.boxing_reward_utils import BoxingReward
-from spinup.examples.pytorch.broil_rtg_pg_v2.boxing_reward_brex import BoxingRewardBrex
+# from spinup.examples.pytorch.broil_rtg_pg_v2.boxing_reward_brex import BoxingRewardBrex
 
 from spinup.examples.pytorch.broil_rtg_pg_v2.cvar_utils import cvar_enumerate_pg
 import dmc2gym
@@ -216,6 +217,8 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
             rew_dist = reward_dist.get_reward_distribution(env_rew)
         elif 'Safexp' in args.env:
             rew_dist = reward_dist.get_reward_distribution(env)
+        elif 'assistive' in args.env:
+            rew_dist = reward_dist.get_reward_distribution(env, action)
         else:
             raise NotImplementedError("Unsupported Environment")
 
@@ -679,6 +682,8 @@ if __name__ == '__main__':
             reward_dist = BoxingReward()
     elif 'Safexp' in args.env:
         reward_dist = SafetyGymReward()
+    elif 'assistive' in args.env:
+        reward_dist = ItchReward()
     else:
         raise NotImplementedError("Unsupported Environment")
 
