@@ -24,9 +24,11 @@ def collect_samples(pid, queue, env, policy, custom_reward,
     min_c_reward = 1e6
     max_c_reward = -1e6
     num_episodes = 0
+    trajs = []
 
     while num_steps < min_batch_size:
         state = env.reset()
+        trajs.append([])
         if running_state is not None:
             state = running_state(state)
         reward_episode = 0
@@ -54,6 +56,7 @@ def collect_samples(pid, queue, env, policy, custom_reward,
             mask = 0 if done else 1
 
             memory.push(state, action, mask, next_state, reward)
+            trajs[-1].append((state, action, mask, next_state, reward))
 
             if render:
                 env.render()
@@ -85,7 +88,7 @@ def collect_samples(pid, queue, env, policy, custom_reward,
         queue.put([pid, memory, log])
 
     else:
-        return memory, log, count
+        return memory, log, count, trajs
 
 
 def merge_log(log_list):
@@ -128,7 +131,7 @@ class Agent:
         #for worker in workers:
             #worker.start()
 
-        memory, log, count = collect_samples(0, None, self.env, self.policy, self.custom_reward, mean_action,
+        memory, log, count, trajs = collect_samples(0, None, self.env, self.policy, self.custom_reward, mean_action,
                                       render, self.running_state, thread_batch_size, count)
 
         # worker_logs = [None] * len(workers)
@@ -149,4 +152,4 @@ class Agent:
         log['action_mean'] = np.mean(np.vstack(batch.action), axis=0)
         log['action_min'] = np.min(np.vstack(batch.action), axis=0)
         log['action_max'] = np.max(np.vstack(batch.action), axis=0)
-        return batch, log, count
+        return batch, log, count, trajs
