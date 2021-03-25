@@ -151,7 +151,7 @@ def update_params(batch, trajs, i_iter):
             masks.append(traj_masks)
             rewards.append(traj_rewards)
 
-            traj_disc_ret = torch.squeeze(discrim_net(torch.cat([traj_states, traj_actions], 1)))
+            traj_disc_ret = -torch.squeeze(  torch.log(discrim_net(torch.cat([traj_states, traj_actions], 1)))  )
             gamma_list = torch.from_numpy(np.array([args.gamma**t for t in range(len(traj_states))])).to(device)
             discounted_traj_disc_ret = torch.dot(traj_disc_ret, gamma_list)
             discrim_returns.append(discounted_traj_disc_ret)
