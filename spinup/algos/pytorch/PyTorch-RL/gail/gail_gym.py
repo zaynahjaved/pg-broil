@@ -11,6 +11,7 @@ import copy
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from spinup.envs.pointbot_const import *
+from spinup.examples.pytorch.broil_rtg_pg_v2.cvar_utils import cvar_enumerate_pg
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from utils import *
@@ -22,7 +23,6 @@ from torch import nn
 from core.ppo import ppo_step
 from core.common import estimate_advantages
 from core.agent import Agent
-
 
 parser = argparse.ArgumentParser(description='PyTorch GAIL example')
 parser.add_argument('--env-name', default="Shelf-v0", metavar='G',
@@ -61,6 +61,11 @@ parser.add_argument('--gpu-index', type=int, default=0, metavar='N')
 parser.add_argument('--rollout', type=int, default=100)
 parser.add_argument('--folder', type=int, default=1)
 parser.add_argument('--num_demos', type=int, default=10)
+
+# RAIL
+parser.add_argument('--cvar', action="store_true")
+parser.add_argument('--alpha', type=float, default=0.9)
+parser.add_argument('--lamda', type=float, default=0.9)
 
 args = parser.parse_args()
 
@@ -126,17 +131,68 @@ def expert_reward(state, action):
 agent = Agent(env, policy_net, device, custom_reward=expert_reward, num_threads=args.num_threads)
 
 
-def update_params(batch, i_iter):
-    states = torch.from_numpy(np.stack(batch.state)).to(dtype).to(device)
-    actions = torch.from_numpy(np.stack(batch.action)).to(dtype).to(device)
-    rewards = torch.from_numpy(np.stack(batch.reward)).to(dtype).to(device)
-    masks = torch.from_numpy(np.stack(batch.mask)).to(dtype).to(device)
-    with torch.no_grad():
-        values = value_net(states)
-        fixed_log_probs = policy_net.get_log_prob(states, actions)
+def update_params(batch, trajs, i_iter):
+    if args.cvar:
+        states = []
+        actions = []
+        rewards = []
+        masks = []
+        advantages = []
+        returns = []
+        discrim_returns = []
+        for traj in trajs:
+            traj_states = torch.from_numpy(np.array([t[0] for t in traj])).to(device)
+            traj_actions = torch.from_numpy(np.array([t[1] for t in traj])).to(device)
+            traj_masks = torch.from_numpy(np.array([t[2] for t in traj])).to(device)
+            traj_rewards = torch.from_numpy(np.array([t[-1] for t in traj])).to(device)
 
-    """get advantage estimation from the trajectories"""
-    advantages, returns = estimate_advantages(rewards, masks, values, args.gamma, args.tau, device)
+            states.append(traj_states)
+            actions.append(traj_actions)
+            masks.append(traj_masks)
+            rewards.append(traj_rewards)
+
+            traj_disc_ret = -torch.squeeze(  torch.log(discrim_net(torch.cat([traj_states, traj_actions], 1)))  )
+            gamma_list = torch.from_numpy(np.array([args.gamma**t for t in range(len(traj_states))])).to(device)
+            discounted_traj_disc_ret = torch.dot(traj_disc_ret, gamma_list)
+            discrim_returns.append(discounted_traj_disc_ret)
+
+        discrim_returns = torch.stack(discrim_returns)
+        probs = (1/len(discrim_returns))*np.ones(len(discrim_returns))
+        sigma_star, _ = cvar_enumerate_pg(discrim_returns, probs, args.alpha)
+        cvar_loss = torch.sum(torch.where(discrim_returns <= sigma_star, discrim_returns, torch.zeros(len(discrim_returns)).to(device)))
+        cvar_loss *= (1/len(discrim_returns))*(1/(1-args.alpha))*args.lamda
+
+        """get advantage estimation from the trajectories"""
+        for i in range(len(rewards)):
+            with torch.no_grad():
+                vals_i = value_net(states[i])
+            advantages_traj, returns_traj = estimate_advantages(rewards[i], masks[i], vals_i, args.gamma, args.tau, device)
+            if sigma_star-discrim_returns[i] > 0:
+                advantages_traj += ((-args.lamda)/(1-args.alpha))*(sigma_star-discrim_returns[i])
+            advantages.append(advantages_traj)
+            returns.append(returns_traj)
+
+        states = torch.stack(states).view(-1, states[0].shape[-1])
+        actions = torch.stack(actions).view(-1, actions[0].shape[-1])
+        rewards = torch.stack(rewards).view(-1, rewards[0].shape[-1])
+        masks = torch.stack(masks).view(-1, masks[0].shape[-1])
+        advantages = torch.stack(advantages).view(-1, advantages[0].shape[-1])
+        returns = torch.stack(returns).view(-1, returns[0].shape[-1])
+
+        with torch.no_grad():
+            fixed_log_probs = policy_net.get_log_prob(states, actions) # TODO: add this in again
+    else:
+        states = torch.from_numpy(np.stack(batch.state)).to(dtype).to(device)
+        actions = torch.from_numpy(np.stack(batch.action)).to(dtype).to(device)
+        rewards = torch.from_numpy(np.stack(batch.reward)).to(dtype).to(device)
+        masks = torch.from_numpy(np.stack(batch.mask)).to(dtype).to(device)
+
+        with torch.no_grad():
+            values = value_net(states)
+            fixed_log_probs = policy_net.get_log_prob(states, actions) # TODO: add this in again
+
+        """get advantage estimation from the trajectories"""
+        advantages, returns = estimate_advantages(rewards, masks, values, args.gamma, args.tau, device)
 
     """update discriminator"""
     for _ in range(1):
@@ -146,6 +202,10 @@ def update_params(batch, i_iter):
         optimizer_discrim.zero_grad()
         discrim_loss = discrim_criterion(g_o, ones((states.shape[0], 1), device=device)) + \
             discrim_criterion(e_o, zeros((expert_traj.shape[0], 1), device=device))
+
+        if args.cvar:
+            discrim_loss += cvar_loss
+
         discrim_loss.backward()
         optimizer_discrim.step()
 
@@ -175,14 +235,14 @@ def main_loop():
         print("Iteration: ", i_iter)
         """generate multiple trajectories that reach the minimum batch_size"""
         discrim_net.to(torch.device('cpu'))
-        batch, log, count = agent.collect_samples(args.min_batch_size, render=args.render, count=count)
+        batch, log, count, trajs = agent.collect_samples(args.min_batch_size, render=args.render, count=count)
         discrim_net.to(device)
         t0 = time.time()
-        update_params(batch, i_iter)
+        update_params(batch, trajs, i_iter)
         t1 = time.time()
         """evaluate with determinstic action (remove noise for exploration)"""
         discrim_net.to(torch.device('cpu'))
-        _, log_eval, _ = agent.collect_samples(args.eval_batch_size, mean_action=True)
+        _, log_eval, _, _ = agent.collect_samples(args.eval_batch_size, mean_action=True)
         rewards.append(log_eval["avg_reward"])
         discrim_net.to(device)
         t2 = time.time()
