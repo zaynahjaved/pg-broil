@@ -1,5 +1,22 @@
 # Policy Gradient Bayesian Robust Optimization for Imitation Learning
 
+
+<p align="center">
+  <a href="https://arxiv.org/abs/2106.06499">View on ArXiv</a> |
+  <a href="https://sites.google.com/view/pg-broil/home">Project Website</a>
+</p>
+
+
+If you find this repository is useful in your research, please cite the paper:
+```
+@inproceedings{javed2021pgbroil,
+  title={Policy Gradient Bayesian Robust Optimization},
+  author={Javed, Zaynah  and Brown, Daniel S. and Sharma, Satvik and Zhu,  Jerry and Balakrishna, Ashwin and Petrik, Marek and Dragan, Anca D. and Goldberg, Ken },
+  booktitle = {Proceedings of the 38th International Conference on Machine Learning, {ICML}},
+  year={2021}
+}
+```
+
 ## Installation
 
 Dependencies for the CartPole environment can be installed by installing Open AI Gym. Dependencies for the Reacher environment can be installed by pip installing the modified version of the dm_control package and an Open AI gym wrapper for the package which are both included in the included source. 
@@ -17,8 +34,6 @@ Also install dm_control suite
 
 pip install dm_control dmc2gym
 ```
-
-
 
 
 
@@ -132,36 +147,3 @@ To run GAIL for the TrashBot environment first go to the spinningup/spinup/envs/
 python gail/gail_gym.py --env PointBot-v0
 ```
 A folder will be created in the working directory which will have example rollouts, rollouts for each epoch, the reward graph over epochs, and average statistics for trash collected and steps in the gray region.
-
-This code is forked from openai/spinningup:
-
-Welcome to Spinning Up in Deep RL!
-==================================
-
-This is an educational resource produced by OpenAI that makes it easier to learn about deep reinforcement learning (deep RL).
-
-For the unfamiliar: [reinforcement learning](https://en.wikipedia.org/wiki/Reinforcement_learning) (RL) is a machine learning approach for teaching agents how to solve tasks by trial and error. Deep RL refers to the combination of RL with [deep learning](http://ufldl.stanford.edu/tutorial/).
-
-This module contains a variety of helpful resources, including:
-
-- a short [introduction](https://spinningup.openai.com/en/latest/spinningup/rl_intro.html) to RL terminology, kinds of algorithms, and basic theory,
-- an [essay](https://spinningup.openai.com/en/latest/spinningup/spinningup.html) about how to grow into an RL research role,
-- a [curated list](https://spinningup.openai.com/en/latest/spinningup/keypapers.html) of important papers organized by topic,
-- a well-documented [code repo](https://github.com/openai/spinningup) of short, standalone implementations of key algorithms,
-- and a few [exercises](https://spinningup.openai.com/en/latest/spinningup/exercises.html) to serve as warm-ups.
-
-Get started at [spinningup.openai.com](https://spinningup.openai.com)!
-
-
-Citing Spinning Up
-------------------
-
-If you reference or use Spinning Up in your research, please cite:
-
-```
-@article{SpinningUp2018,
-    author = {Achiam, Joshua},
-    title = {{Spinning Up in Deep Reinforcement Learning}},
-    year = {2018}
-}
-```
