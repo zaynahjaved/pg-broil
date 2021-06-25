@@ -147,3 +147,10 @@ To run GAIL for the TrashBot environment first go to the spinningup/spinup/envs/
 python gail/gail_gym.py --env PointBot-v0
 ```
 A folder will be created in the working directory which will have example rollouts, rollouts for each epoch, the reward graph over epochs, and average statistics for trash collected and steps in the gray region.
+
+### RAIL
+
+To run RAIL (Risk Averse Imitation Learning) for the TrashBot environment, you can similarly run it as GAIL by passing in additional arguments.
+```
+python gail/gail_gym.py --env PointBot-v0 --cvar --alpha 0.9 --lamda [0, infinity)
+```
