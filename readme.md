@@ -31,7 +31,6 @@ pip install -e .
 
 Also install dm_control suite
 ```
-
 pip install dm_control dmc2gym
 ```
 
