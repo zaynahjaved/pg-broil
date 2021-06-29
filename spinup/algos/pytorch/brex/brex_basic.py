@@ -155,10 +155,10 @@ if __name__=="__main__":
     #model_files = []
     
     pickle_files = []
-    import os:
-        for filename in os.listdir(args.features_dir):
-            if filename.endswith(".pkl" or ".p"):
-                pickle_files.append(file_dir + "/" + filename)
+    import os
+    for filename in os.listdir(args.features_dir):
+        if filename.endswith(".pkl" or ".p"):
+            pickle_files.append(args.features_dir + "/" + filename)
     print(pickle_files)
 
     demo_fcnts = []
@@ -177,12 +177,12 @@ if __name__=="__main__":
         pairwise_prefs =  [(5,4),(4,3),(3,2),(2,1),(1,0)]
 
 
-    else:
+    elif args.env == 'PointBot-v0':
         for file in pickle_files:
             with open(file, 'rb') as handle:
                 b = pickle.load(handle)
-                demo_fcnts += [b["Bad"]]
-                demo_fcnts += [b["Good"]]
+                demo_fcnts += [b["Bad_feature"]]
+                demo_fcnts += [b["Good_feature"]]
                 pairwise_prefs += [(counter, counter+1)]
                 counter += 2
 
