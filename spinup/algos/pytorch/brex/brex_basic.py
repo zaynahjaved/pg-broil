@@ -30,6 +30,7 @@ def calc_linearized_pairwise_ranking_loss(last_layer, pairwise_prefs, demo_cnts,
             i,j = ppref
             outputs[p,:] = torch.tensor([demo_returns[i], demo_returns[j]])
         labels = torch.ones(len(pairwise_prefs)).long()
+        cum_log_likelihood = = -loss_criterion(outputs, labels)
     return cum_log_likelihood.item()
 
 
