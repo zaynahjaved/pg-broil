@@ -2,11 +2,9 @@ import numpy as np
 from spinup.envs.pointbot_const import *
 import pickle
 class PointBotRewardBrex():
-    # Daniel's Suggested Reward
     def __init__(self):
         with open('brex_reward_trashbot.pkl', 'rb') as handle:
             b = pickle.load(handle)
-        #print(b)
 
         self.posterior = []
         self.obstacle_penalty = []
@@ -40,7 +38,6 @@ class PointBotRewardBrex():
             initial_reward += self.trash_penalty
 
         if env.obstacle(obs) == 0:
-            #return np.array([initial_reward] * self.posterior.shape[0])
             return initial_reward + self.non_obstacle_penalty
         else:
             extra_cost = self.obstacle_penalty * env.obstacle(obs)
