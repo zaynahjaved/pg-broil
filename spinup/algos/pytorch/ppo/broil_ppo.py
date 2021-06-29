@@ -16,16 +16,14 @@ from spinup.utils.logx import EpochLogger
 from spinup.utils.mpi_pytorch import setup_pytorch_for_mpi, sync_params, mpi_avg_grads
 from spinup.utils.mpi_tools import mpi_fork, mpi_avg, proc_id, mpi_statistics_scalar, num_procs
 
-from spinup.examples.pytorch.broil_rtg_pg_v2.pointbot_reward_utils import PointBotReward
-from spinup.examples.pytorch.broil_rtg_pg_v2.pointbot_reward_brex import PointBotRewardBrex
-from spinup.examples.pytorch.broil_rtg_pg_v2.reacher_reward_utils import ReacherReward
-from spinup.examples.pytorch.broil_rtg_pg_v2.cartpole_reward_utils import CartPoleReward
-from spinup.examples.pytorch.broil_rtg_pg_v2.manipulator_reward_utils import ManipulatorReward
-from spinup.examples.pytorch.broil_rtg_pg_v2.shelf_reward_utils import ShelfReward
-from spinup.examples.pytorch.broil_rtg_pg_v2.boxing_reward_utils import BoxingReward
-# from spinup.examples.pytorch.broil_rtg_pg_v2.boxing_reward_brex import BoxingRewardBrex
+from spinup.rewards.pointbot_reward_utils import PointBotReward
+from spinup.rewards.pointbot_reward_brex import PointBotRewardBrex
+from spinup.rewards.reacher_reward_utils import ReacherReward
+from spinup.rewards.cartpole_reward_utils import CartPoleReward
+from spinup.rewards.boxing_reward_utils import BoxingReward
+from spinup.rewards.boxing_reward_brex import BoxingRewardBrex
 
-from spinup.examples.pytorch.broil_rtg_pg_v2.cvar_utils import cvar_enumerate_pg
+from spinup.rewards.cvar_utils import cvar_enumerate_pg
 import dmc2gym
 
 torchify = lambda x: torch.FloatTensor(x).to(torch.device('cpu'))
@@ -205,11 +203,7 @@ def ppo(env_fn, reward_dist, broil_risk_metric='cvar', actor_critic=core.BROILAc
             rew_dist = reward_dist.get_reward_distribution(next_o)
         elif args.env == 'PointBot-v0':
             rew_dist = reward_dist.get_reward_distribution(env, next_o)
-        elif args.env == 'Shelf-v0':
-            rew_dist = reward_dist.get_reward_distribution(env)
         elif args.env == 'reacher':
-            rew_dist = reward_dist.get_reward_distribution(env)
-        elif args.env == 'manipulator':
             rew_dist = reward_dist.get_reward_distribution(env)
         elif args.env == 'Boxing-ram-v0':
             rew_dist = reward_dist.get_reward_distribution(env_rew)
@@ -674,8 +668,6 @@ if __name__ == '__main__':
         reward_dist = ShelfReward()
     elif args.env == 'reacher':
         reward_dist = ReacherReward()
-    elif args.env == 'manipulator':
-        reward_dist = ManipulatorReward()
     elif args.env == 'Boxing-ram-v0':
         if args.brex:
             reward_dist = BoxingRewardBrex()
@@ -684,13 +676,8 @@ if __name__ == '__main__':
     else:
         raise NotImplementedError("Unsupported Environment")
 
-    if 'Safexp' in args.env:
-        import safety_gym
-
     if args.env == 'reacher':
         env_fn = lambda: dmc2gym.make(domain_name='reacher', task_name='hard',seed=args.seed)
-    elif args.env == 'manipulator':
-        env_fn = lambda: dmc2gym.make(domain_name='manipulator', task_name='bring_ball', seed=args.seed)
     else:
         env_fn = lambda : gym.make(args.env)
 
