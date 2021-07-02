@@ -11,7 +11,7 @@ import copy
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from spinup.envs.pointbot_const import *
-from spinup.examples.pytorch.broil_rtg_pg_v2.cvar_utils import cvar_enumerate_pg
+from spinup.rewards.cvar_utils import cvar_enumerate_pg
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from utils import *
