@@ -26,8 +26,8 @@ import random
 
 from spinup.envs.pointbot_const import *
 
-from spinup.examples.pytorch.broil_rtg_pg_v2.cvar_utils import cvar_enumerate_pg
-from spinup.examples.pytorch.broil_rtg_pg_v2.pointbot_reward_utils import PointBotReward
+from spinup.rewards.cvar_utils import cvar_enumerate_pg
+from spinup.rewards.pointbot_reward_utils import PointBotReward
 
 class LineBuilder:
     def __init__(self, line, env, fig, typ):
