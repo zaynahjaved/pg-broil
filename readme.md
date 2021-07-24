@@ -40,7 +40,7 @@ pip install dm_control dmc2gym
 
 
 To run BROIL VPG:
-In the spinningup/spinup/algos/pytorch/vpg directory run
+In the pg-broil/spinup/algos/pytorch/vpg directory run
 ```bash
 python broil_vpg2.py --env (CartPole-v0, PointBot-v0)
 ```
@@ -53,7 +53,7 @@ Pass in BROIL arguments using
 (Can also pass in all of the arguments listed in the original spinningup vpg.py code, ie: seed, epochs, env_name, policy_lr, etc)
 
 To run BROIL PPO:
-In the spinningup/spinup/algos/pytorch/ppo directory:
+In the pg-broil/spinup/algos/pytorch/ppo directory:
 
 First create a folder (broil_dataX) and 3 subfolders (results, visualizations, PointBot_networks) within the PPO directory. Make sure to rename "broil_dataX" on line 557 so files are saved in the right folder. Then run the following command for a grid_search over PointBot-v0:
 ```bash
@@ -91,19 +91,19 @@ Pretrain a policy using spinningup then use evaluate_policy.py and give it the s
 Note you need to pass in the max horizon for the MDP to initialize the buffer size. Max horizon should be the max number of steps possible in the environment.
 
 ```
-python spinup/algos/pytorch/evaluation/evaluate_policy.py --save_path spinningup/data/installtest/installtest_s0 --env CartPole-v0 --num_rollouts 100 --max_horizon 200
+python pg-broil/algos/pytorch/evaluation/evaluate_policy.py --save_path spinningup/data/installtest/installtest_s0 --env CartPole-v0 --num_rollouts 100 --max_horizon 200
 ```
 ## Bayesian REX
 
 To generate the Bayesian REX posteriors used in the paper for TrashBot run:
 
 ```
-python spinup/algos/pytorch/rex/brex/brex_basic.py --features_dir demonstrations/trashbot_demos --normalize
+python pg-broil/algos/pytorch/rex/brex/brex_basic.py --features_dir demonstrations/trashbot_demos --normalize
 ```
 
 To generate the Bayesian REX posterior used in the appendix for the reacher environment run:
 ```
-python spinup/algos/pytorch/rex/brex/brex_basic.py --features_dir demonstrations/reacher_easy_demos --env reacher --normalize
+python pg-broil/algos/pytorch/rex/brex/brex_basic.py --features_dir demonstrations/reacher_easy_demos --env reacher --normalize
 ```
 
 This will also print out the mean and MAP reward. To run a PBRL baseline, take the outputted MAP and put it into the spinup/examples/pytorch/broil_rtg_pg_v2/reacher_reward_utils.py or spinup/examples/pytorch/broil_rtg_pg_v2/pointbot_reward_utils.py (depending on the environment you want to run) and set the self.posterior to an array containing just 1.
@@ -141,7 +141,7 @@ A folder will be created in the working directory which will have example rollou
 
 ### GAIL
 
-To run GAIL for the TrashBot environment first go to the spinningup/spinup/envs/pointbot_const.py and change the constants to create the trash enviornment in the paper which is given in the comments. Then add the pkl files of the demos created by demonstrator.py (the demos used in the paper are already inside the demos folder). Then go to the spinningup/spinup/algos/pytorch/PyTorch-RL directory and run the command:
+To run GAIL for the TrashBot environment first go to the pg-broil/spinup/envs/pointbot_const.py and change the constants to create the trash enviornment in the paper which is given in the comments. Then add the pkl files of the demos created by demonstrator.py (the demos used in the paper are already inside the demos folder). Then go to the pg-broil/spinup/algos/pytorch/PyTorch-RL directory and run the command:
 ```
 python gail/gail_gym.py --env PointBot-v0
 ```
