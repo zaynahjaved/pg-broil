@@ -44,9 +44,9 @@ def add_controller_args(parser):
     parser.add_argument('--num_elites', type=int, default=50,
                         help='Number of elites for CEM')
     parser.add_argument('--n_particles', type=int, default=20)
-    parser.add_argument('--plan_hor', type=int, default=10,
+    parser.add_argument('--plan_hor', type=int, default=100,
                         help='How many steps into the future to look when planning')
-    parser.add_argument('--max_iters', type=int, default=5,
+    parser.add_argument('--max_iters', type=int, default=500,
                         help='How many CEM iterations')
     parser.add_argument('--random_percent', type=float, default=1.0,
                         help='How many CEM candidates should be sampled from a new distribution')

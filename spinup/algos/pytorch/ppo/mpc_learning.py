@@ -232,7 +232,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', '-s', type=int, default=0)
     parser.add_argument('--cpu', type=int, default=1)
     parser.add_argument('--steps', type=int, default=200)
-    parser.add_argument('--epochs', type=int, default=400)
+    parser.add_argument('--epochs', type=int, default=1)
     parser.add_argument('--exp_name', type=str, default='ppo')
     parser.add_argument('--render', type=bool, default=False)
     parser.add_argument('--policy_lr', type=float, default=3e-4, help="learning rate for policy")
