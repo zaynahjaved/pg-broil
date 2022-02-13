@@ -101,7 +101,7 @@ def mpc(env_fn, reward_dist, broil_risk_metric='cvar', ac_kwargs=dict(), render=
     for epoch in tqdm(range(epochs)):
         first_rollout = True
         running_cvar = []
-        total_reward_dist = np.zeros(num_rew_fns)
+        # total_reward_dist = np.zeros(num_rew_fns)
         num_runs = 0
         epoch_ret = 0
         obstacles = 0
@@ -110,8 +110,9 @@ def mpc(env_fn, reward_dist, broil_risk_metric='cvar', ac_kwargs=dict(), render=
             a = policy.act(torch.as_tensor(o, dtype=torch.float32))
 
             next_o, r, d, info = env.step(a)
-            rew_dist = get_reward_distribution(args, reward_dist, env, next_o, r, a)
-            total_reward_dist += rew_dist.flatten()
+            print("state " + str(t), o, " | action ", a, "| next state ", next_o)
+            # rew_dist = get_reward_distribution(args, reward_dist, env, next_o, r, a)
+            # total_reward_dist += rew_dist.flatten()
             epoch_ret += r
             ep_len += 1
             if args.env == 'PointBot-v0':
@@ -141,7 +142,7 @@ def mpc(env_fn, reward_dist, broil_risk_metric='cvar', ac_kwargs=dict(), render=
 
                 num_runs += 1
 
-                if args.env == 'PointBot-v0':
+                if args.env == 'PointBot-v0' and terminal:
                     last_trajectory = np.array(env.hist)
                     trajectories_x.append(last_trajectory[:, 0])
                     trajectories_y.append(last_trajectory[:, 2])
@@ -150,8 +151,8 @@ def mpc(env_fn, reward_dist, broil_risk_metric='cvar', ac_kwargs=dict(), render=
 
         # Store stuff for saving data
         ret_list.append(epoch_ret)
-        wc_ret_list.append(np.min(total_reward_dist) / float(num_runs))
-        bc_ret_list.append(np.max(total_reward_dist / float(num_runs)))
+        # wc_ret_list.append(np.min(total_reward_dist) / float(num_runs))
+        # bc_ret_list.append(np.max(total_reward_dist / float(num_runs)))
         cvar_list.append(sum(running_cvar))
         obstacle_list.append(obstacles / float(num_runs))
         

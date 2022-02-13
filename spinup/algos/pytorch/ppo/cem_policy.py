@@ -86,8 +86,8 @@ class CEM:
                 # Sort
                 values = self.compute_broil_rewards(action_samples, self.broil_alpha, self.broil_lambda)
                 values = values.squeeze()
-
                 sortid = values.argsort()
+                print(values[sortid])
                 actions_sorted = action_samples[sortid]
                 elites = actions_sorted[-iter_num_elites:]
 
@@ -98,7 +98,6 @@ class CEM:
             itr += 1
         # Return the best action
         action = actions_sorted[-1][0]
-        print(action)
         return action.detach().cpu().numpy()
 
     def predict(self, action_samples):
@@ -144,7 +143,9 @@ class CEM:
             action_samples,
             min=self.env.action_space.low[0],
             max=self.env.action_space.high[0])
-
+        print(self.env.action_space.low[0], self.env.action_space.high[0])
+        print(action_samples)
+        raise Exception
         return action_samples
 
     def get_reward_hypotheses(self):
@@ -188,30 +189,39 @@ class CEM:
         predicted_states = np.zeros((num_cand, horizon + 1, action_dim + 2))
         predictor = gym.make(self.env_name)
 
+
         #compute over the horizon
+        # for i in range(num_cand):
+        #     curr_cand_rew = np.zeros(len_rew_hypo)
+        #     o = predictor.reset()
+        #     predicted_states[i, 0, :] = o
+        #     for j in range(horizon):
+        #         next_o, r, d, info = predictor.step(action_samples[i][j].squeeze())
+        #         predicted_states[i, j, :] = next_o
+        #         rew_dist = self.reward_dist.get_reward_distribution(predictor, next_o)
+        #         # rewards_curr_sample = torch.matmul(W, curr_sample_traj).squeeze() #dim = [num_reward_hypo X 1], rewards for each hypothesis for this traj
+        #         curr_cand_rew += rew_dist
+        #     batch_rewards[i, :] = curr_cand_rew
+        # exp_batch_rets = np.mean(batch_rewards, axis=0)
+        # cand_broil_values = np.zeros(num_cand)
+        # for i in range(num_cand):
+        #     rewards_curr_sample = batch_rewards[i]
+        #     sigma, cvar = cvar_enumerate_pg(rewards_curr_sample, posterior_reward_weights, broil_alpha)
+        #     # print("sigma = {}, cvar = {}".format(sigma, cvar))
+        #     expected_curr_rew_sample = np.dot(rewards_curr_sample, posterior_reward_weights) #weighted average
+        #     cand_broil_values[i] = broil_lambda * expected_curr_rew_sample + (1 - broil_lambda) * cvar
+        # return cand_broil_values
+
+
+        batch_rewards = np.zeros((num_cand, horizon))
         for i in range(num_cand):
-            curr_cand_rew = np.zeros(len_rew_hypo)
             o = predictor.reset()
             predicted_states[i, 0, :] = o
             for j in range(horizon):
                 next_o, r, d, info = predictor.step(action_samples[i][j].squeeze())
                 predicted_states[i, j, :] = next_o
-                rew_dist = self.reward_dist.get_reward_distribution(predictor, next_o)
+                batch_rewards[i, j] = r
                 # rewards_curr_sample = torch.matmul(W, curr_sample_traj).squeeze() #dim = [num_reward_hypo X 1], rewards for each hypothesis for this traj
-                curr_cand_rew += rew_dist
-            
-            batch_rewards[i, :] = curr_cand_rew
-
-        exp_batch_rets = np.mean(batch_rewards, axis=0)
-
-        
-        cand_broil_values = np.zeros(num_cand)
-        for i in range(num_cand):
-            rewards_curr_sample = batch_rewards[i]
-            sigma, cvar = cvar_enumerate_pg(rewards_curr_sample, posterior_reward_weights, broil_alpha)
-            # print("sigma = {}, cvar = {}".format(sigma, cvar))
-            expected_curr_rew_sample = np.dot(rewards_curr_sample, posterior_reward_weights) #weighted average
-            cand_broil_values[i] = broil_lambda * expected_curr_rew_sample + (1 - broil_lambda) * cvar
-        return cand_broil_values
+        return batch_rewards.sum(1)
 
 
